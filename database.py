@@ -1,0 +1,252 @@
+import mysql.connector
+from mysql.connector import Error
+from config import DB_CONFIG
+from datetime import datetime
+
+class Database:
+    def __init__(self):
+        self.connection = None
+        self.connect()
+
+    def connect(self):
+        try:
+            self.connection = mysql.connector.connect(**DB_CONFIG)
+            self.create_tables()
+        except Error as e:
+            print(f"Error connecting to MySQL: {e}")
+
+    def create_tables(self):
+        """Создание всех необходимых таблиц."""
+        cursor = self.connection.cursor()
+        cursor.execute("SET SESSION wait_timeout=31536000")
+        
+        # Таблица пользователей
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id BIGINT PRIMARY KEY,
+                telegram_login VARCHAR(255),
+                full_name VARCHAR(255),
+                passport_series VARCHAR(20),
+                passport_number VARCHAR(20),
+                passport_date DATE,
+                passport_issued TEXT,
+                passport_code VARCHAR(20),
+                birth_date DATE,
+                registration_address TEXT,
+                inn VARCHAR(20),
+                phone VARCHAR(20),
+                email VARCHAR(255),
+                start_date DATE,
+                tax_type ENUM('self_employed_npd', 'ip_npd', 'ip_usn'),
+                tax_document_path VARCHAR(500),
+                department VARCHAR(100),
+                position VARCHAR(255),
+                bank_details TEXT,
+                registration_status ENUM('draft', 'pending', 'nda_pending', 'active', 'rejected', 'fired') DEFAULT 'draft',
+                nda_status ENUM('not_sent', 'sent', 'signed', 'rejected') DEFAULT 'not_sent',
+                nda_file_path VARCHAR(500),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_email (email)
+            )
+        """)
+        
+        # Таблица для отчетов о работе
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS work_reports (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id BIGINT,
+                report_month DATE,
+                description TEXT,
+                amount DECIMAL(10,2),
+                bank_details TEXT,
+                status ENUM('pending', 'approved_by_manager', 'rejected', 'sent_to_lawyer') DEFAULT 'pending',
+                manager_comment TEXT,
+                manager_id BIGINT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        # Таблица документов
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS documents (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id BIGINT,
+                doc_type ENUM('nda', 'contract', 'act', 'invoice', 'check'),
+                file_path VARCHAR(500),
+                month DATE,
+                status ENUM('sent', 'signed_by_user', 'approved_by_lawyer', 'paid', 'rejected'),
+                lawyer_comment TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        # Таблица для уведомлений о смене данных
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS data_change_requests (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id BIGINT,
+                change_type ENUM('tax_type', 'last_name'),
+                old_value TEXT,
+                new_value TEXT,
+                status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        self.connection.commit()
+
+    # ----- ПОЛЬЗОВАТЕЛИ -----
+    def add_user(self, user_id, **kwargs):
+        cursor = self.connection.cursor()
+        placeholders = ', '.join(['%s'] * len(kwargs))
+        columns = ', '.join(kwargs.keys())
+        query = f"INSERT INTO users (user_id, {columns}) VALUES (%s, {placeholders})"
+        values = [user_id] + list(kwargs.values())
+        cursor.execute(query, values)
+        self.connection.commit()
+        return cursor.lastrowid
+
+    def get_user(self, user_id):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+        return cursor.fetchone()
+
+    def update_user(self, user_id, **kwargs):
+        cursor = self.connection.cursor()
+        set_clause = ', '.join([f"{k} = %s" for k in kwargs])
+        values = list(kwargs.values()) + [user_id]
+        cursor.execute(f"UPDATE users SET {set_clause} WHERE user_id = %s", values)
+        self.connection.commit()
+
+    def get_users_by_department(self, department, status='active'):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM users WHERE department = %s AND registration_status = %s",
+            (department, status)
+        )
+        return cursor.fetchall()
+
+    def get_pending_users(self):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM users WHERE registration_status = 'pending'")
+        return cursor.fetchall()
+
+    # ----- ОТЧЕТЫ -----
+    def add_report(self, user_id, month, description, amount, bank_details):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            """INSERT INTO work_reports 
+               (user_id, report_month, description, amount, bank_details) 
+               VALUES (%s, %s, %s, %s, %s)""",
+            (user_id, month, description, amount, bank_details)
+        )
+        self.connection.commit()
+        return cursor.lastrowid
+
+    def get_pending_reports_by_department(self, department):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT wr.*, u.full_name, u.department 
+            FROM work_reports wr
+            JOIN users u ON wr.user_id = u.user_id
+            WHERE u.department = %s AND wr.status = 'pending'
+            ORDER BY wr.created_at DESC
+        """, (department,))
+        return cursor.fetchall()
+
+    def get_reports_by_user(self, user_id, month=None):
+        cursor = self.connection.cursor(dictionary=True)
+        if month:
+            cursor.execute(
+                "SELECT * FROM work_reports WHERE user_id = %s AND report_month = %s",
+                (user_id, month)
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM work_reports WHERE user_id = %s ORDER BY report_month DESC",
+                (user_id,)
+            )
+        return cursor.fetchall()
+
+    def update_report_status(self, report_id, status, manager_comment=None, manager_id=None):
+        cursor = self.connection.cursor()
+        if manager_comment:
+            cursor.execute(
+                "UPDATE work_reports SET status = %s, manager_comment = %s, manager_id = %s WHERE id = %s",
+                (status, manager_comment, manager_id, report_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE work_reports SET status = %s, manager_id = %s WHERE id = %s",
+                (status, manager_id, report_id)
+            )
+        self.connection.commit()
+
+    # ----- ДОКУМЕНТЫ -----
+    def add_document(self, user_id, doc_type, file_path, month=None, status='sent'):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "INSERT INTO documents (user_id, doc_type, file_path, month, status) VALUES (%s, %s, %s, %s, %s)",
+            (user_id, doc_type, file_path, month, status)
+        )
+        self.connection.commit()
+        return cursor.lastrowid
+
+    def get_user_documents(self, user_id, doc_type=None):
+        cursor = self.connection.cursor(dictionary=True)
+        if doc_type:
+            cursor.execute(
+                "SELECT * FROM documents WHERE user_id = %s AND doc_type = %s ORDER BY created_at DESC",
+                (user_id, doc_type)
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM documents WHERE user_id = %s ORDER BY created_at DESC",
+                (user_id,)
+            )
+        return cursor.fetchall()
+
+    def get_pending_nda_requests(self):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT u.* FROM users u
+            WHERE u.nda_status = 'not_sent' AND u.registration_status = 'pending'
+        """)
+        return cursor.fetchall()
+
+    def update_document_status(self, doc_id, status, comment=None):
+        cursor = self.connection.cursor()
+        if comment:
+            cursor.execute(
+                "UPDATE documents SET status = %s, lawyer_comment = %s WHERE id = %s",
+                (status, comment, doc_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE documents SET status = %s WHERE id = %s",
+                (status, doc_id)
+            )
+        self.connection.commit()
+
+    # ----- ЗАПРОСЫ НА ИЗМЕНЕНИЕ -----
+    def add_change_request(self, user_id, change_type, new_value):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "INSERT INTO data_change_requests (user_id, change_type, new_value) VALUES (%s, %s, %s)",
+            (user_id, change_type, new_value)
+        )
+        self.connection.commit()
+        return cursor.lastrowid
+
+    def get_pending_change_requests(self):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT dcr.*, u.full_name, u.department 
+            FROM data_change_requests dcr
+            JOIN users u ON dcr.user_id = u.user_id
+            WHERE dcr.status = 'pending'
+        """)
+        return cursor.fetchall()
