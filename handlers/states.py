@@ -54,3 +54,28 @@ class LawyerActions(StatesGroup):
     nda_upload = State()
     payment_review = State()
     correction_comment = State()
+
+class PaymentRequest(StatesGroup):
+    """Состояния для создания заявки на оплату"""
+    amount = State()
+    payment_purpose = State()
+    counterparty = State()
+    project = State()
+    contract_number = State()
+    invoice_file = State()
+    confirm = State()
+
+class PaymentRequestUpload(StatesGroup):
+    """Состояния для загрузки документов к заявке"""
+    contract = State()
+    act = State()
+    check = State()
+    payment_proof = State()
+
+class AdminActions(StatesGroup):
+    """Состояния для админ-панели"""
+    select_action = State()
+    select_user = State()
+    confirm_action = State()
+    add_user_id = State()
+    set_role = State()

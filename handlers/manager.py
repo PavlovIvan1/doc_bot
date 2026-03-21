@@ -149,3 +149,88 @@ async def fire_employee(callback: CallbackQuery):
     )
     
     await callback.message.edit_text("✅ Сотрудник уволен")
+
+# ----- ЗАЯВКИ НА ОПЛАТУ -----
+
+@router.message(F.text == "💰 Заявки на оплату")
+async def payment_requests_list(message: Message):
+    if not await check_manager(message):
+        return
+    
+    department = MANAGERS[message.from_user.id]
+    requests = db.get_pending_payment_requests_for_manager(department)
+    
+    if not requests:
+        await message.answer("✅ Нет заявок на оплату")
+        return
+    
+    for req in requests:
+        text = f"""
+💰 Заявка #{req['id']}
+
+👤 Сотрудник: {req['full_name']}
+💵 Сумма: {req['amount']} руб.
+📝 Назначение: {req['payment_purpose']}
+🏢 Контрагент: {req['counterparty']}
+📁 Проект: {req['project']}
+        """
+        await message.answer(
+            text,
+            reply_markup=kb.manager_payment_review_keyboard(req['id'])
+        )
+
+@router.callback_query(F.data.startswith("manager_approve_"))
+async def manager_approve_payment(callback: CallbackQuery):
+    request_id = int(callback.data.replace("manager_approve_", ""))
+    
+    # Обновляем статус
+    db.update_payment_request_status(request_id, 'pending_finance', callback.from_user.id)
+    
+    # Уведомляем сотрудника
+    request = db.get_payment_request(request_id)
+    await callback.bot.send_message(
+        request['user_id'],
+        f"✅ Ваша заявка #{request_id} одобрена руководителем!\n\n"
+        "Передана на проверку финансовому отделу."
+    )
+    
+    # Уведомляем финансовый отдел
+    from config import FINANCE_DIRECTOR_ID
+    await callback.bot.send_message(
+        FINANCE_DIRECTOR_ID,
+        f"📋 Заявка #{request_id} одобрена руководителем\n\n"
+        f"Сумма: {request['amount']} руб.\n"
+        f"Контрагент: {request['counterparty']}",
+        reply_markup=kb.finance_review_keyboard(request_id)
+    )
+    
+    await callback.message.edit_text(callback.message.text + "\n\n✅ Заявка одобрена!")
+
+@router.callback_query(F.data.startswith("manager_reject_"))
+async def manager_reject_payment(callback: CallbackQuery, state: FSMContext):
+    request_id = int(callback.data.replace("manager_reject_", ""))
+    await state.update_data(reject_request_id=request_id)
+    
+    await callback.message.answer("❌ Напишите причину отклонения:")
+    await state.set_state(ManagerActions.correction_comment)
+
+@router.message(ManagerActions.correction_comment)
+async def manager_reject_reason(message: Message, state: FSMContext):
+    data = await state.get_data()
+    request_id = data['reject_request_id']
+    
+    # Обновляем статус
+    db.update_payment_request_status(
+        request_id, 'rejected', message.from_user.id, message.text
+    )
+    
+    # Уведомляем сотрудника
+    request = db.get_payment_request(request_id)
+    await message.bot.send_message(
+        request['user_id'],
+        f"❌ Ваша заявка #{request_id} отклонена\n\n"
+        f"Причина: {message.text}"
+    )
+    
+    await message.answer("✅ Заявка отклонена, сотрудник уведомлён")
+    await state.clear()

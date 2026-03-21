@@ -6,7 +6,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand
 
 from config import BOT_TOKEN
-from handlers import registration, personal_cabinet, manager, lawyer, finance
+from handlers import registration, personal_cabinet, manager, lawyer, finance, admin
 
 logging.basicConfig(level=logging.INFO)
 
@@ -33,6 +33,7 @@ async def main():
     dp.include_router(manager.router)
     dp.include_router(lawyer.router)
     dp.include_router(finance.router)
+    dp.include_router(admin.router)
 
     await set_commands(bot)
     await bot.delete_webhook(drop_pending_updates=True)

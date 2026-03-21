@@ -1,9 +1,11 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.types import InlineKeyboardButton
+from aiogram.fsm.context import FSMContext
 from database import Database
 import keyboard as kb
-from config import FINANCE_DIRECTOR_ID, ACCOUNTANT_ID
+from config import FINANCE_DIRECTOR_ID, ACCOUNTANT_ID, LAWYER_ID
+import os
 
 router = Router()
 db = Database()
@@ -148,3 +150,182 @@ async def mark_paid(callback: CallbackQuery):
     )
     
     await callback.message.edit_text(callback.message.text + "\n\n✅ Оплата проведена")
+
+# ----- НОВЫЕ ЗАЯВКИ НА ОПЛАТУ -----
+
+@router.message(F.text == "💰 Заявки на оплату")
+async def finance_payment_requests(message: Message):
+    if not await check_finance(message):
+        return
+    
+    requests = db.get_pending_payment_requests_for_finance()
+    
+    if not requests:
+        await message.answer("✅ Нет заявок на оплату")
+        return
+    
+    for req in requests:
+        text = f"""
+💰 Заявка #{req['id']}
+
+👤 Сотрудник: {req['full_name']}
+🏢 Отдел: {req['department']}
+💵 Сумма: {req['amount']} руб.
+📝 Назначение: {req['payment_purpose']}
+🏢 Контрагент: {req['counterparty']}
+📁 Проект: {req['project']}
+📋 Статус: {req['status']}
+        """
+        await message.answer(
+            text,
+            reply_markup=kb.finance_review_keyboard(req['id'])
+        )
+
+@router.callback_query(F.data.startswith("finance_approve_"))
+async def finance_approve_payment(callback: CallbackQuery):
+    request_id = int(callback.data.replace("finance_approve_", ""))
+    
+    # Обновляем статус
+    db.update_payment_request_status(request_id, 'approved', callback.from_user.id)
+    
+    # Уведомляем сотрудника
+    request = db.get_payment_request(request_id)
+    await callback.bot.send_message(
+        request['user_id'],
+        f"✅ Ваша заявка #{request_id} одобрена финансовым отделом!\n\n"
+        "Ожидайте оплату."
+    )
+    
+    # Уведомляем бухгалтера
+    await callback.bot.send_message(
+        ACCOUNTANT_ID,
+        f"💰 Заявка #{request_id} готова к оплате\n\n"
+        f"Сумма: {request['amount']} руб.\n"
+        f"Контрагент: {request['counterparty']}\n"
+        f"Проект: {request['project']}",
+        reply_markup=kb.accountant_payment_keyboard(request_id)
+    )
+    
+    await callback.message.edit_text(callback.message.text + "\n\n✅ Заявка передана на оплату!")
+
+@router.callback_query(F.data.startswith("finance_reject_"))
+async def finance_reject_payment(callback: CallbackQuery, state: FSMContext):
+    request_id = int(callback.data.replace("finance_reject_", ""))
+    await state.update_data(finance_reject_id=request_id)
+    
+    await callback.message.answer("❌ Напишите причину возврата:")
+    await state.set_state("finance_reject_reason")
+
+@router.message("finance_reject_reason")
+async def finance_reject_reason(message: Message, state: FSMContext):
+    data = await state.get_data()
+    request_id = data['finance_reject_id']
+    
+    # Обновляем статус
+    db.update_payment_request_status(
+        request_id, 'rejected', message.from_user.id, message.text
+    )
+    
+    # Уведомляем сотрудника
+    request = db.get_payment_request(request_id)
+    await message.bot.send_message(
+        request['user_id'],
+        f"❌ Ваша заявка #{request_id} возвращена на доработку\n\n"
+        f"Причина: {message.text}"
+    )
+    
+    await message.answer("✅ Заявка возвращена, сотрудник уведомлён")
+    await state.clear()
+
+# Заявки в ожидании оплаты (для бухгалтера)
+@router.message(F.text == "💳 Заявки в ожидании оплаты")
+async def awaiting_payment_requests(message: Message):
+    if not await check_finance(message):
+        return
+    
+    requests = db.get_payment_requests_for_accountant()
+    
+    if not requests:
+        await message.answer("✅ Нет заявок в ожидании оплаты")
+        return
+    
+    for req in requests:
+        text = f"""
+💳 Заявка #{req['id']}
+
+👤 Получатель: {req['full_name']}
+💵 Сумма: {req['amount']} руб.
+📁 Проект: {req['project']}
+💳 Реквизиты: {req.get('bank_details', 'Нет реквизитов')}
+        """
+        await message.answer(
+            text,
+            reply_markup=kb.accountant_payment_keyboard(req['id'])
+        )
+
+@router.callback_query(F.data.startswith("accountant_paid_"))
+async def accountant_mark_paid(callback: CallbackQuery):
+    request_id = int(callback.data.replace("accountant_paid_", ""))
+    
+    # Обновляем статус
+    db.update_payment_request_status(request_id, 'paid', callback.from_user.id)
+    
+    # Уведомляем сотрудника
+    request = db.get_payment_request(request_id)
+    await callback.bot.send_message(
+        request['user_id'],
+        f"✅ Заявка #{request_id} оплачена!\n\n"
+        f"Сумма: {request['amount']} руб.\n\n"
+        "📎 Пожалуйста, прикрепите:\n"
+        "- Подписанный акт\n"
+        "- Подписанный договор (если требуется)\n"
+        "🧾 Чек из «Мой налог» (для самозанятых)"
+    )
+    
+    await callback.message.edit_text(callback.message.text + "\n\n✅ Оплата подтверждена!")
+
+# Связаться с сотрудником
+@router.message(F.text == "👤 Связаться с сотрудником")
+async def contact_employee(message: Message, state: FSMContext):
+    if not await check_finance(message):
+        return
+    
+    # Получаем список активных сотрудников
+    cursor = db.connection.cursor(dictionary=True)
+    cursor.execute("SELECT user_id, full_name FROM users WHERE registration_status = 'active'")
+    users = cursor.fetchall()
+    
+    if not users:
+        await message.answer("Нет активных сотрудников")
+        return
+    
+    builder = kb.InlineKeyboardBuilder()
+    for user in users:
+        builder.add(InlineKeyboardButton(
+            text=user['full_name'],
+            callback_data=f"finance_contact_{user['user_id']}"
+        ))
+    builder.adjust(1)
+    
+    await message.answer("Выберите сотрудника:", reply_markup=builder.as_markup())
+
+@router.callback_query(F.data.startswith("finance_contact_"))
+async def finance_contact_user(callback: CallbackQuery, state: FSMContext):
+    user_id = int(callback.data.replace("finance_contact_", ""))
+    await state.update_data(contact_user_id=user_id)
+    
+    await callback.message.answer("Введите сообщение для сотрудника:")
+    await state.set_state("finance_send_message")
+
+@router.message("finance_send_message")
+async def finance_send_to_user(message: Message, state: FSMContext):
+    data = await state.get_data()
+    user_id = data['contact_user_id']
+    
+    await message.bot.send_message(
+        user_id,
+        f"📢 Сообщение от финансового отдела:\n\n{message.text}"
+    )
+    
+    await message.answer("✅ Сообщение отправлено!")
+    await state.clear()

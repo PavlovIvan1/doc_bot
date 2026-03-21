@@ -96,6 +96,72 @@ class Database:
             )
         """)
         
+        # Таблица заявок на оплату
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS payment_requests (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id BIGINT,
+                amount DECIMAL(12,2),
+                payment_purpose TEXT,
+                counterparty VARCHAR(255),
+                project VARCHAR(255),
+                contract_number VARCHAR(100),
+                status ENUM(
+                    'pending_manager',    # Ожидает проверки руководителя
+                    'pending_finance',    # Ожидает проверки финансов
+                    'approved',           # Одобрено
+                    'rejected',          # Отклонено
+                    'awaiting_payment',   # Ожидает оплаты
+                    'paid',               # Оплачено
+                    'documents_uploaded', # Документы загружены
+                    'closed'              # Закрыто
+                ) DEFAULT 'pending_manager',
+                manager_id BIGINT,
+                manager_comment TEXT,
+                finance_id BIGINT,
+                finance_comment TEXT,
+                payment_proof_path VARCHAR(500),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        # Таблица документов заявок
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS payment_request_documents (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                payment_request_id INT,
+                doc_type ENUM('invoice', 'contract', 'act', 'payment_proof', 'check'),
+                file_path VARCHAR(500),
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (payment_request_id) REFERENCES payment_requests(id)
+            )
+        """)
+        
+        # Таблица истории статусов
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS payment_request_history (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                payment_request_id INT,
+                old_status VARCHAR(50),
+                new_status VARCHAR(50),
+                comment TEXT,
+                changed_by BIGINT,
+                changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (payment_request_id) REFERENCES payment_requests(id)
+            )
+        """)
+        
+        # Таблица админов
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admins (
+                user_id BIGINT PRIMARY KEY,
+                role ENUM('super_admin', 'manager_admin', 'finance_admin') DEFAULT 'super_admin',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
         self.connection.commit()
 
     # ----- ПОЛЬЗОВАТЕЛИ -----
@@ -249,4 +315,154 @@ class Database:
             JOIN users u ON dcr.user_id = u.user_id
             WHERE dcr.status = 'pending'
         """)
+        return cursor.fetchall()
+
+    # ----- ЗАЯВКИ НА ОПЛАТУ -----
+    def add_payment_request(self, user_id, amount, payment_purpose, counterparty, project, contract_number=None):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            """INSERT INTO payment_requests 
+               (user_id, amount, payment_purpose, counterparty, project, contract_number, status) 
+               VALUES (%s, %s, %s, %s, %s, %s, 'pending_manager')""",
+            (user_id, amount, payment_purpose, counterparty, project, contract_number)
+        )
+        self.connection.commit()
+        return cursor.lastrowid
+
+    def get_payment_request(self, request_id):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT pr.*, u.full_name, u.department, u.telegram_login 
+             FROM payment_requests pr 
+             JOIN users u ON pr.user_id = u.user_id 
+             WHERE pr.id = %s", 
+            (request_id,)
+        )
+        return cursor.fetchone()
+
+    def get_user_payment_requests(self, user_id):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM payment_requests WHERE user_id = %s ORDER BY created_at DESC",
+            (user_id,)
+        )
+        return cursor.fetchall()
+
+    def get_pending_payment_requests_for_manager(self, department):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT pr.*, u.full_name, u.department 
+            FROM payment_requests pr
+            JOIN users u ON pr.user_id = u.user_id
+            WHERE pr.status = 'pending_manager' AND u.department = %s
+            ORDER BY pr.created_at DESC
+        """, (department,))
+        return cursor.fetchall()
+
+    def get_pending_payment_requests_for_finance(self):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT pr.*, u.full_name, u.department 
+            FROM payment_requests pr
+            JOIN users u ON pr.user_id = u.user_id
+            WHERE pr.status IN ('pending_finance', 'approved')
+            ORDER BY pr.created_at DESC
+        """)
+        return cursor.fetchall()
+
+    def get_payment_requests_for_accountant(self):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT pr.*, u.full_name, u.department, u.bank_details 
+            FROM payment_requests pr
+            JOIN users u ON pr.user_id = u.user_id
+            WHERE pr.status IN ('approved', 'awaiting_payment')
+            ORDER BY pr.created_at DESC
+        """)
+        return cursor.fetchall()
+
+    def update_payment_request_status(self, request_id, status, user_id=None, comment=None):
+        cursor = self.connection.cursor()
+        
+        # Получаем старый статус
+        cursor.execute("SELECT status FROM payment_requests WHERE id = %s", (request_id,))
+        old_status = cursor.fetchone()[0]
+        
+        if user_id and comment:
+            if status == 'rejected':
+                cursor.execute(
+                    "UPDATE payment_requests SET status = %s, manager_id = %s, manager_comment = %s WHERE id = %s",
+                    (status, user_id, comment, request_id)
+                )
+            elif status == 'paid':
+                cursor.execute(
+                    "UPDATE payment_requests SET status = %s, finance_id = %s WHERE id = %s",
+                    (status, user_id, request_id)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE payment_requests SET status = %s, finance_id = %s, finance_comment = %s WHERE id = %s",
+                    (status, user_id, comment, request_id)
+                )
+        elif user_id:
+            cursor.execute(
+                "UPDATE payment_requests SET status = %s, manager_id = %s WHERE id = %s",
+                (status, user_id, request_id)
+            )
+        else:
+            cursor.execute(
+                "UPDATE payment_requests SET status = %s WHERE id = %s",
+                (status, request_id)
+            )
+        
+        # Записываем историю
+        cursor.execute(
+            "INSERT INTO payment_request_history (payment_request_id, old_status, new_status, comment, changed_by) VALUES (%s, %s, %s, %s, %s)",
+            (request_id, old_status, status, comment, user_id)
+        )
+        
+        self.connection.commit()
+
+    def add_payment_request_document(self, request_id, doc_type, file_path):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "INSERT INTO payment_request_documents (payment_request_id, doc_type, file_path) VALUES (%s, %s, %s)",
+            (request_id, doc_type, file_path)
+        )
+        self.connection.commit()
+        return cursor.lastrowid
+
+    def get_payment_request_documents(self, request_id):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM payment_request_documents WHERE payment_request_id = %s",
+            (request_id,)
+        )
+        return cursor.fetchall()
+
+    def get_payment_request_history(self, request_id):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM payment_request_history WHERE payment_request_id = %s ORDER BY changed_at ASC",
+            (request_id,)
+        )
+        return cursor.fetchall()
+
+    # ----- АДМИНИСТРАТОРЫ -----
+    def add_admin(self, user_id, role='super_admin'):
+        cursor = self.connection.cursor()
+        cursor.execute(
+            "INSERT INTO admins (user_id, role) VALUES (%s, %s) ON DUPLICATE KEY UPDATE role = %s",
+            (user_id, role, role)
+        )
+        self.connection.commit()
+
+    def get_admin(self, user_id):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM admins WHERE user_id = %s", (user_id,))
+        return cursor.fetchone()
+
+    def get_all_admins(self):
+        cursor = self.connection.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM admins")
         return cursor.fetchall()
