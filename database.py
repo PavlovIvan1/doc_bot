@@ -26,6 +26,7 @@ class Database:
                 user_id BIGINT PRIMARY KEY,
                 telegram_login VARCHAR(255),
                 full_name VARCHAR(255),
+                passport_data VARCHAR(20),
                 passport_series VARCHAR(20),
                 passport_number VARCHAR(20),
                 passport_date DATE,
@@ -49,6 +50,13 @@ class Database:
                 UNIQUE KEY unique_email (email)
             )
         """)
+        
+        # Миграция: добавляем колонку passport_data если её нет
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN passport_data VARCHAR(20)")
+            self.connection.commit()
+        except:
+            pass  # Колонка уже существует
         
         # Таблица для отчетов о работе
         cursor.execute("""
