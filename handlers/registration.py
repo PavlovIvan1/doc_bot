@@ -86,7 +86,7 @@ async def show_full_menu(message: Message):
         reply_markup=kb.main_menu_keyboard()
     )
 
-@router.message(F.text == "� Заполнить карточку")
+@router.message(F.text == "📝 Заполнить карточку")
 async def start_registration(message: Message, state: FSMContext):
     text = f"""
 Перед стартом: ты даешь согласие на обработку персональных данных ([ссылка]({CONSENT_LINK})) с целью оформления документов (нда, договор, акт выполненных работ), а также выплат согласно акту внутри компании
