@@ -332,10 +332,7 @@ class Database:
     def get_payment_request(self, request_id):
         cursor = self.connection.cursor(dictionary=True)
         cursor.execute(
-            "SELECT pr.*, u.full_name, u.department, u.telegram_login 
-             FROM payment_requests pr 
-             JOIN users u ON pr.user_id = u.user_id 
-             WHERE pr.id = %s", 
+            "SELECT pr.*, u.full_name, u.department, u.telegram_login FROM payment_requests pr JOIN users u ON pr.user_id = u.user_id WHERE pr.id = %s",
             (request_id,)
         )
         return cursor.fetchone()
