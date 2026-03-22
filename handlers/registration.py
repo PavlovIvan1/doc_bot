@@ -211,7 +211,7 @@ async def reg_tax_type(callback: CallbackQuery, state: FSMContext):
         )
         await state.set_state(Registration.department)
 
-@router.message(Registration.tax_document, F.document)
+@router.message(Registration.tax_document, F.content_type == 'document')
 async def reg_tax_document(message: Message, state: FSMContext, bot):
     # Скачиваем документ
     file = await bot.get_file(message.document.file_id)

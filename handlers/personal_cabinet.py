@@ -253,7 +253,7 @@ async def payment_request_contract(message: Message, state: FSMContext):
     await message.answer("📎 Прикрепите файл счёта (PDF, фото или doc):")
     await state.set_state(PaymentRequest.invoice_file)
 
-@router.message(PaymentRequest.invoice_file, F.document)
+@router.message(PaymentRequest.invoice_file, F.content_type == 'document')
 async def payment_request_invoice(message: Message, state: FSMContext, bot):
     # Скачиваем файл
     file = await bot.get_file(message.document.file_id)
@@ -418,7 +418,7 @@ async def upload_check(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("🧾 Прикрепите чек:")
     await state.set_state(PaymentRequestUpload.check)
 
-@router.message(PaymentRequestUpload.act, F.document)
+@router.message(PaymentRequestUpload.act, F.content_type == 'document')
 async def save_act(message: Message, state: FSMContext, bot):
     data = await state.get_data()
     request_id = data['upload_request_id']
@@ -432,7 +432,7 @@ async def save_act(message: Message, state: FSMContext, bot):
     await message.answer("✅ Акт прикреплён!")
     await state.clear()
 
-@router.message(PaymentRequestUpload.contract, F.document)
+@router.message(PaymentRequestUpload.contract, F.content_type == 'document')
 async def save_contract(message: Message, state: FSMContext, bot):
     data = await state.get_data()
     request_id = data['upload_request_id']
@@ -446,7 +446,7 @@ async def save_contract(message: Message, state: FSMContext, bot):
     await message.answer("✅ Договор прикреплён!")
     await state.clear()
 
-@router.message(PaymentRequestUpload.check, F.document)
+@router.message(PaymentRequestUpload.check, F.content_type == 'document')
 async def save_check(message: Message, state: FSMContext, bot):
     data = await state.get_data()
     request_id = data['upload_request_id']
