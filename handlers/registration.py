@@ -215,6 +215,11 @@ async def reg_tax_type(callback: CallbackQuery, state: FSMContext):
 
 @router.message(Registration.tax_document)
 async def reg_tax_document(message: Message, state: FSMContext, bot):
+    # Проверяем, что есть документ
+    if not message.document:
+        await message.answer("❌ Пожалуйста, прикрепите файл документа")
+        return
+    
     # Скачиваем документ
     file = await bot.get_file(message.document.file_id)
     file_path = f"downloads/tax_docs/{message.from_user.id}_{message.document.file_name}"
