@@ -62,7 +62,7 @@ async def upload_nda(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("📎 Отправьте файл НДА для подписания:")
     await state.set_state(LawyerActions.nda_upload)
 
-@router.message(LawyerActions.nda_upload, F.content_type == 'document')
+@router.message(LawyerActions.nda_upload)
 async def save_nda(message: Message, state: FSMContext, bot):
     data = await state.get_data()
     user_id = data['nda_user_id']
@@ -100,7 +100,7 @@ async def upload_signed_nda(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("📎 Отправьте подписанный НДА:")
     await state.set_state("waiting_signed_nda")
 
-@router.message("waiting_signed_nda", F.content_type == 'document')
+@router.message("waiting_signed_nda")
 async def receive_signed_nda(message: Message, state: FSMContext, bot):
     user_id = message.from_user.id
     

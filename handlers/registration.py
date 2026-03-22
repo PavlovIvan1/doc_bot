@@ -86,16 +86,7 @@ async def show_full_menu(message: Message):
         reply_markup=kb.main_menu_keyboard()
     )
 
-# Обработчик для документов вне состояний - просит пройти регистрацию
-@router.message(F.content_type == 'document')
-async def handle_document_without_state(message: Message):
-    user = db.get_user(message.from_user.id)
-    if not user:
-        await message.answer("❌ Вы не в процессе регистрации. Нажмите /start")
-    elif user['registration_status'] != 'active':
-        await message.answer("⏳ Ваша регистрация в процессе. Завершите её сначала.")
-    else:
-        await message.answer("📎 Для загрузки документов используйте соответствующие кнопки в меню.")
+
 
 @router.message(F.text == "📝 Заполнить карточку")
 async def start_registration(message: Message, state: FSMContext):
@@ -222,7 +213,7 @@ async def reg_tax_type(callback: CallbackQuery, state: FSMContext):
         )
         await state.set_state(Registration.department)
 
-@router.message(Registration.tax_document, F.content_type == 'document')
+@router.message(Registration.tax_document)
 async def reg_tax_document(message: Message, state: FSMContext, bot):
     # Скачиваем документ
     file = await bot.get_file(message.document.file_id)
