@@ -4,7 +4,7 @@ from config import DEPARTMENTS, TAX_TYPES
 
 # ----- ОСНОВНЫЕ КЛАВИАТУРЫ -----
 def main_menu_keyboard():
-    """Главное меню для активных пользователей"""
+    """Главное меню для активных пользователей (полное)"""
     buttons = [
         [KeyboardButton(text="💰 Создать счёт на оплату")],
         [KeyboardButton(text="📋 Сдать факт выполненных работ")],
@@ -17,6 +17,23 @@ def main_menu_keyboard():
         [KeyboardButton(text="✏️ Уведомить об изменениях")]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+def simple_main_menu_keyboard():
+    """Упрощённое меню - 2 кнопки по ТЗ"""
+    buttons = [
+        [KeyboardButton(text="📄 Подписать NDA")],
+        [KeyboardButton(text="💰 Создать счёт")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+def department_selection_keyboard():
+    """Выбор отдела при старте"""
+    from config import DEPARTMENTS
+    builder = InlineKeyboardBuilder()
+    for dept in DEPARTMENTS:
+        builder.add(InlineKeyboardButton(text=dept, callback_data=f"select_department_{dept}"))
+    builder.adjust(1)
+    return builder.as_markup()
 
 def registration_start_keyboard():
     """Клавиатура для начала регистрации"""
@@ -325,6 +342,10 @@ def request_documents_keyboard(request_id, status):
     # После оплаты можно загрузить чек
     if status in ['paid', 'documents_uploaded']:
         builder.add(InlineKeyboardButton(text="🧾 Прикрепить чек", callback_data=f"upload_check_{request_id}"))
+    
+    # Кнопка закрытия заявки доступна если документы загружены
+    if status == 'documents_uploaded':
+        builder.add(InlineKeyboardButton(text="🔒 Закрыть заявку", callback_data=f"close_request_{request_id}"))
     
     builder.adjust(1)
     return builder.as_markup()

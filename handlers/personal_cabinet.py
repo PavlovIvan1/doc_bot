@@ -457,10 +457,57 @@ async def save_check(message: Message, state: FSMContext, bot):
     
     db.add_payment_request_document(request_id, 'check', file_path)
     
-    # Обновляем статус если это требуется
+    # Проверяем какие документы загружены и обновляем статус
     request = db.get_payment_request(request_id)
-    if request['status'] == 'paid':
-        db.update_payment_request_status(request_id, 'documents_uploaded')
+    docs = db.get_payment_request_documents(request_id)
+    doc_types = [d['doc_type'] for d in docs]
     
-    await message.answer("✅ Чек прикреплён!")
+    # Если все нужные документы загружены - меняем статус на "Документы загружены"
+    if request['status'] == 'paid':
+        # Проверяем есть ли акт и чек (основные документы)
+        if 'act' in doc_types and 'check' in doc_types:
+            db.update_payment_request_status(request_id, 'documents_uploaded')
+            await message.answer(
+                "✅ Чек прикреплён!\n\n"
+                "📎 Статус изменён: Документы загружены"
+            )
+        else:
+            await message.answer(
+                "✅ Чек прикреплён!\n\n"
+                "Пожалуйста, убедите что загружены:\n"
+                "- Подписанный акт\n"
+                "- Чек\n\n"
+                "Когда все документы будут загружены, статус изменится на 'Документы загружены'"
+            )
+    else:
+        await message.answer("✅ Чек прикреплён!")
+    
     await state.clear()
+
+# Кнопка для закрытия заявки (когда всё готово)
+@router.callback_query(F.data == "close_request")
+async def close_request(callback: CallbackQuery):
+    request_id = int(callback.data.replace("close_request_", ""))
+    request = db.get_payment_request(request_id)
+    
+    if request['user_id'] != callback.from_user.id:
+        await callback.answer("Это не ваша заявка", show_alert=True)
+        return
+    
+    # Проверяем что все документы на месте
+    docs = db.get_payment_request_documents(request_id)
+    doc_types = [d['doc_type'] for d in docs]
+    
+    if 'act' not in doc_types or 'check' not in doc_types:
+        await callback.message.answer(
+            "❌ Нельзя закрыть заявку. Загрузите:\n"
+            "- Подписанный акт\n"
+            "- Чек"
+        )
+        return
+    
+    db.update_payment_request_status(request_id, 'closed', callback.from_user.id, 'Заявка закрыта сотрудником')
+    
+    await callback.message.edit_text(
+        callback.message.text + "\n\n✅ Заявка закрыта!"
+    )

@@ -34,10 +34,7 @@ CHANNEL_NEWS = os.getenv("CHANNEL_NEWS")
 CONSENT_LINK = os.getenv("CONSENT_LINK")
 
 # Руководители отделов (user_id: department)
-MANAGERS = {
-    123456789: 'Отдел контента',  # Пример
-    123456790: 'Отдел маркетинга',
-}
+# Заполняется ниже после DEPARTMENTS
 
 # Доступные отделы
 DEPARTMENTS = [
@@ -48,6 +45,26 @@ DEPARTMENTS = [
     'Отдел контроля качества',
     'Финансово-юридический отдел'
 ]
+
+# Руководители отделов (user_id: department)
+# Можно указать в .env как: MANAGER_123456789="Отдел маркетинга"
+MANAGERS = {}
+
+# Загружаем руководителей из переменных окружения
+for key, value in os.environ.items():
+    if key.startswith('MANAGER_') and value in DEPARTMENTS:
+        try:
+            user_id = int(key.replace('MANAGER_', ''))
+            MANAGERS[user_id] = value
+        except ValueError:
+            pass
+
+# Если не загружено из .env, используем пример (для тестирования)
+if not MANAGERS:
+    MANAGERS = {
+        123456789: 'Отдел контента',  # Пример - ЗАМЕНИТЬ НА РЕАЛЬНЫЕ ID
+        123456790: 'Отдел маркетинга',
+    }
 
 # Типы налогообложения
 TAX_TYPES = {

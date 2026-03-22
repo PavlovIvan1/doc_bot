@@ -19,9 +19,10 @@ async def cmd_start(message: Message):
     
     if user:
         if user['registration_status'] == 'active':
+            # По ТЗ - 2 кнопки: Подписать NDA и Создать счёт
             await message.answer(
-                "Главное меню:",
-                reply_markup=kb.main_menu_keyboard()
+                "Выбери действие:",
+                reply_markup=kb.simple_main_menu_keyboard()
             )
         elif user['registration_status'] == 'pending':
             await message.answer(
@@ -45,6 +46,32 @@ async def cmd_start(message: Message):
 Жми ниже👇
         """
         await message.answer(text, reply_markup=kb.registration_start_keyboard())
+
+# Обработчик кнопки "Подписать NDA"
+@router.message(F.text == "📄 Подписать NDA")
+async def sign_nda_menu(message: Message):
+    user = db.get_user(message.from_user.id)
+    if not user or user['registration_status'] != 'active':
+        await message.answer("❌ Доступ запрещён. Пройдите регистрацию.")
+        return
+    
+    await message.answer(
+        "📄 Загрузите подписанный NDA:",
+        reply_markup=kb.nda_keyboard()
+    )
+
+# Обработчик кнопки "Создать счёт" - перенаправляет на создание заявки
+@router.message(F.text == "💰 Создать счёт")
+async def create_invoice_shortcut(message: Message, state: FSMContext):
+    from handlers.states import PaymentRequest
+    user = db.get_user(message.from_user.id)
+    if not user or user['registration_status'] != 'active':
+        await message.answer("❌ Доступ запрещён. Пройдите регистрацию.")
+        return
+    
+    # Перенаправляем на создание заявки
+    await message.answer("💰 Создание заявки на оплату\n\nВведите сумму (только число, например: 15000):")
+    await state.set_state(PaymentRequest.amount)
 
 @router.message(F.text == "📝 Заполнить карточку")
 async def start_registration(message: Message, state: FSMContext):

@@ -238,3 +238,58 @@ async def add_admin_command(message: Message):
         await message.answer(f"✅ Админ {user_id} добавлен с ролью {role}")
     except ValueError:
         await message.answer("❌ Неверный формат команды")
+
+# Команда для проверки просроченных актов
+@router.message(Command("check_overdue"))
+async def check_overdue_acts(message: Message):
+    if not await check_admin(message):
+        return
+    
+    from datetime import datetime, timedelta
+    
+    # Находим оплаченные заявки старше 5 дней без актов
+    cursor = db.connection.cursor(dictionary=True)
+    five_days_ago = datetime.now() - timedelta(days=5)
+    
+    cursor.execute("""
+        SELECT pr.*, u.full_name, u.telegram_login 
+        FROM payment_requests pr
+        JOIN users u ON pr.user_id = u.user_id
+        WHERE pr.status = 'paid' 
+        AND pr.created_at < %s
+    """, (five_days_ago,))
+    
+    requests = cursor.fetchall()
+    
+    overdue_count = 0
+    sent_notifications = 0
+    
+    for req in requests:
+        # Проверяем есть ли акт
+        cursor.execute(
+            "SELECT id FROM payment_request_documents WHERE payment_request_id = %s AND doc_type = 'act'",
+            (req['id'],)
+        )
+        act_doc = cursor.fetchone()
+        
+        if not act_doc:
+            overdue_count += 1
+            # Отправляем напоминание сотруднику
+            try:
+                await message.bot.send_message(
+                    req['user_id'],
+                    f"⚠️ Напоминание по заявке #{req['id']}\n\n"
+                    f"Вы получили оплату {five_days_ago.strftime('%d.%m.%Y')}, "
+                    f"но акт и чек ещё не загружены.\n\n"
+                    f"Пожалуйста, загрузите закрывающие документы.\n"
+                    f"Без них заявка не будет закрыта."
+                )
+                sent_notifications += 1
+            except:
+                pass
+    
+    await message.answer(
+        f"📊 Проверка завершена:\n\n"
+        f"Всего просроченных заявок: {overdue_count}\n"
+        f"Отправлено уведомлений: {sent_notifications}"
+    )
