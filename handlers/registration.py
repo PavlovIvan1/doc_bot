@@ -346,3 +346,9 @@ async def edit_data(callback: CallbackQuery, state: FSMContext):
         # Сохраняем что редактируем
         await state.update_data(editing_field=field)
         await state.set_state("editing_data")
+
+# Обработчик для нераспознанных сообщений
+@router.message()
+async def fallback_message(message: Message):
+    """Ловит все нераспознанные сообщения"""
+    await message.answer("Извините, я не понял. Нажмите /start для начала работы.")
