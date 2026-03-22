@@ -22,7 +22,8 @@ def simple_main_menu_keyboard():
     """Упрощённое меню - 2 кнопки по ТЗ"""
     buttons = [
         [KeyboardButton(text="📄 Подписать NDA")],
-        [KeyboardButton(text="💰 Создать счёт")]
+        [KeyboardButton(text="💰 Создать счёт")],
+        [KeyboardButton(text="📋 Меню")]
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 

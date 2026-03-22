@@ -73,7 +73,20 @@ async def create_invoice_shortcut(message: Message, state: FSMContext):
     await message.answer("💰 Создание заявки на оплату\n\nВведите сумму (только число, например: 15000):")
     await state.set_state(PaymentRequest.amount)
 
-@router.message(F.text == "📝 Заполнить карточку")
+# Обработчик кнопки "Меню" - показывает полное меню
+@router.message(F.text == "📋 Меню")
+async def show_full_menu(message: Message):
+    user = db.get_user(message.from_user.id)
+    if not user or user['registration_status'] != 'active':
+        await message.answer("❌ Доступ запрещён. Пройдите регистрацию.")
+        return
+    
+    await message.answer(
+        "📋 Полное меню:",
+        reply_markup=kb.main_menu_keyboard()
+    )
+
+@router.message(F.text == "� Заполнить карточку")
 async def start_registration(message: Message, state: FSMContext):
     text = f"""
 Перед стартом: ты даешь согласие на обработку персональных данных ([ссылка]({CONSENT_LINK})) с целью оформления документов (нда, договор, акт выполненных работ), а также выплат согласно акту внутри компании
