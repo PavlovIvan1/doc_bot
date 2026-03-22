@@ -8,14 +8,31 @@ import os
 from handlers.states import Registration
 from database import Database
 import keyboard as kb
-from config import LAWYER_ID, CONSENT_LINK
+from config import LAWYER_ID, FINANCE_DIRECTOR_ID, ACCOUNTANT_ID, MANAGERS, CONSENT_LINK
 
 router = Router()
 db = Database()
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
-    user = db.get_user(message.from_user.id)
+    user_id = message.from_user.id
+    
+    # Проверяем, если user_id соответствует одной из ролей
+    if user_id == LAWYER_ID:
+        await message.answer("👨‍💼 Меню юриста:", reply_markup=kb.lawyer_main_keyboard())
+        return
+    elif user_id == FINANCE_DIRECTOR_ID:
+        await message.answer("💰 Меню финансового директора:", reply_markup=kb.finance_main_keyboard())
+        return
+    elif user_id == ACCOUNTANT_ID:
+        await message.answer("📊 Меню бухгалтера:", reply_markup=kb.finance_main_keyboard())
+        return
+    elif user_id in MANAGERS:
+        dept = MANAGERS[user_id]
+        await message.answer(f"👔 Меню руководителя отдела {dept}:", reply_markup=kb.manager_main_keyboard())
+        return
+    
+    user = db.get_user(user_id)
     
     if user:
         if user['registration_status'] == 'active':
