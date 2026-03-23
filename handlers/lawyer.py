@@ -24,7 +24,7 @@ async def new_nda_requests(message: Message):
     if not await check_lawyer(message):
         return
     
-    users = db.get_pending_users()
+    users = db.get_pending_nda_requests()
     
     if not users:
         await message.answer("✅ Нет новых запросов на НДА")
