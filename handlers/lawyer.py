@@ -120,12 +120,16 @@ async def receive_signed_nda(message: Message, state: FSMContext, bot):
     # Обновляем документ в БД
     db.add_document(user_id, 'nda', file_path, status='signed_by_user')
     
-    # Уведомляем юриста
-    await bot.send_message(
-        LAWYER_ID,
-        f"📄 Подрядчик загрузил подписанный НДА. Проверить документ.",
-        reply_markup=kb.nda_review_keyboard(user_id)
-    )
+    # Уведомляем юриста (только если LAWYER_ID валидный)
+    if LAWYER_ID and LAWYER_ID != user_id:
+        try:
+            await bot.send_message(
+                LAWYER_ID,
+                f"📄 Подрядчик {user_id} загрузил подписанный НДА. Проверить документ.",
+                reply_markup=kb.nda_review_keyboard(user_id)
+            )
+        except:
+            print(f"Не удалось уведомить юриста LAWYER_ID={LAWYER_ID}")
     
     await message.answer("✅ НДА отправлен на проверку юристу")
     await state.clear()
