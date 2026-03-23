@@ -1,5 +1,4 @@
-[3/23/2026 4:35 PM] Ivan: /start
-[3/23/2026 4:35 PM] Infinity.host: 👨‍💼 Меню юриста:from aiogram import Router, F
+from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
