@@ -124,14 +124,28 @@ async def send_report(callback: CallbackQuery, state: FSMContext):
     
     # Уведомляем руководителя
     user = db.get_user(callback.from_user.id)
-    if user['department'] in MANAGERS:
-        manager_id = [uid for uid, dept in MANAGERS.items() if dept == user['department']][0]
-        await callback.bot.send_message(
-            manager_id,
-            f"📊 Новый отчет от {user['full_name']}\n"
-            f"Сумма: {data['amount']} руб.\n"
-            f"Описание: {data['description'][:100]}..."
-        )
+    print(f"DEBUG: user department = {user['department']}")
+    print(f"DEBUG: MANAGERS = {MANAGERS}")
+    
+    manager_id = None
+    # Проверяем, есть ли менеджер для этого отдела
+    for uid, depts in MANAGERS.items():
+        if user['department'] in depts:
+            manager_id = uid
+            break
+    
+    if not manager_id:
+        # Используем MY_ID как запасной вариант
+        from config import MY_ID
+        manager_id = MY_ID
+        print(f"DEBUG: Using MY_ID as fallback: {manager_id}")
+    
+    await callback.bot.send_message(
+        manager_id,
+        f"📊 Новый отчет от {user['full_name']}\n"
+        f"Сумма: {data['amount']} руб.\n"
+        f"Описание: {data['description'][:100]}..."
+    )
     
     await callback.message.edit_text("✅ Отчет отправлен руководителю на проверку!")
     await state.clear()
@@ -311,11 +325,26 @@ async def send_payment_request(callback: CallbackQuery, state: FSMContext):
     user = db.get_user(callback.from_user.id)
     
     # Уведомляем руководителя
-    from config import MANAGERS
-    if user['department'] in MANAGERS:
-        manager_id = [uid for uid, dept in MANAGERS.items() if dept == user['department']]
-        if manager_id:
-            text = f"""
+    from config import MANAGERS, MY_ID
+    print(f"DEBUG: user department = {user['department']}")
+    print(f"DEBUG: MANAGERS = {MANAGERS}")
+    print(f"DEBUG: MY_ID = {MY_ID}")
+    
+    manager_id = None
+    # Проверяем, есть ли менеджер для этого отдела
+    for uid, depts in MANAGERS.items():
+        print(f"DEBUG: Checking manager {uid} with depts {depts}")
+        if user['department'] in depts:
+            manager_id = uid
+            print(f"DEBUG: Found manager {manager_id} for department {user['department']}")
+            break
+    
+    # Если менеджер не найден, используем MY_ID как запасной вариант
+    if not manager_id:
+        manager_id = MY_ID
+        print(f"DEBUG: Using MY_ID as fallback: {manager_id}")
+    
+    text = f"""
 📋 Новая заявка на оплату #{request_id}
 
 👤 Сотрудник: {user['full_name']}
@@ -324,12 +353,12 @@ async def send_payment_request(callback: CallbackQuery, state: FSMContext):
 📝 Назначение: {request['payment_purpose']}
 🏢 Контрагент: {request['counterparty']}
 📁 Проект: {request['project']}
-            """
-            await callback.bot.send_message(
-                manager_id[0],
-                text,
-                reply_markup=kb.manager_payment_review_keyboard(request_id)
-            )
+    """
+    await callback.bot.send_message(
+        manager_id,
+        text,
+        reply_markup=kb.manager_payment_review_keyboard(request_id)
+    )
     
     await callback.message.edit_text(
         f"✅ Заявка #{request_id} отправлена на согласование!\n\n"

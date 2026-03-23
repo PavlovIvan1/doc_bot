@@ -18,6 +18,15 @@ async def check_manager(message: Message):
         return False
     return True
 
+def get_manager_department(user_id):
+    """Получить первый отдел менеджера"""
+    if user_id in MANAGERS:
+        depts = MANAGERS[user_id]
+        if isinstance(depts, list):
+            return depts[0] if depts else None
+        return depts
+    return None
+
 @router.message(F.text == "👥 Выбрать отдел")
 async def select_department(message: Message):
     if not await check_manager(message):
@@ -48,7 +57,10 @@ async def reports_to_check(message: Message):
     if not await check_manager(message):
         return
     
-    department = MANAGERS[message.from_user.id]
+    department = get_manager_department(message.from_user.id)
+    if not department:
+        await message.answer("❌ У вас не назначен отдел")
+        return
     reports = db.get_pending_reports_by_department(department)
     
     if not reports:
@@ -157,7 +169,10 @@ async def payment_requests_list(message: Message):
     if not await check_manager(message):
         return
     
-    department = MANAGERS[message.from_user.id]
+    department = get_manager_department(message.from_user.id)
+    if not department:
+        await message.answer("❌ У вас не назначен отдел")
+        return
     requests = db.get_pending_payment_requests_for_manager(department)
     
     if not requests:

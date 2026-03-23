@@ -18,6 +18,7 @@ DB_CONFIG = {
 LAWYER_ID = int(os.getenv("LAWYER_ID", 0))
 FINANCE_DIRECTOR_ID = int(os.getenv("FINANCE_DIRECTOR_ID", 0))
 ACCOUNTANT_ID = int(os.getenv("ACCOUNTANT_ID", 0))
+MY_ID = int(os.getenv("MY_ID", 0))
 
 # Ссылки на чаты отделов
 DEPARTMENT_CHATS = {
@@ -47,23 +48,25 @@ DEPARTMENTS = [
 ]
 
 # Руководители отделов (user_id: department)
-# Можно указать в .env как: MANAGER_123456789="Отдел маркетинга"
+# Можно указать в .env как: MANAGER_123456789="Название_отдела"
 MANAGERS = {}
 
 # Загружаем руководителей из переменных окружения
+# Поддерживаем несколько отделов для одного менеджера
 for key, value in os.environ.items():
     if key.startswith('MANAGER_') and value in DEPARTMENTS:
         try:
             user_id = int(key.replace('MANAGER_', ''))
-            MANAGERS[user_id] = value
+            if user_id not in MANAGERS:
+                MANAGERS[user_id] = []
+            MANAGERS[user_id].append(value)
         except ValueError:
             pass
 
 # Если не загружено из .env, используем пример (для тестирования)
 if not MANAGERS:
     MANAGERS = {
-        123456789: 'Отдел контента',  # Пример - ЗАМЕНИТЬ НА РЕАЛЬНЫЕ ID
-        123456790: 'Отдел маркетинга',
+        123456789: ['Отдел контента', 'Отдел маркетинга'],
     }
 
 # Типы налогообложения
