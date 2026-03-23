@@ -52,6 +52,7 @@ class ManagerActions(StatesGroup):
 class LawyerActions(StatesGroup):
     """Состояния для действий юриста"""
     nda_upload = State()
+    signed_nda_receive = State()
     payment_review = State()
     correction_comment = State()
 
