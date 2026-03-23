@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardButton
-import os
+import asyncio
 
 from handlers.states import LawyerActions
 from database import Database
@@ -83,6 +83,7 @@ async def save_nda(message: Message, state: FSMContext, bot):
     db.add_document(user_id, 'nda', file_path)
     
     # Отправляем сотруднику
+    print(f"DEBUG: Sending NDA to user_id={user_id}")
     text = """
 Коллега, тебе направлен НДА на подписание.
 Важно: подпиши документ и направь файл с твоей подписью в течение 24 часов.
@@ -101,11 +102,14 @@ async def save_nda(message: Message, state: FSMContext, bot):
 
 @router.callback_query(F.data == "upload_signed_nda")
 async def upload_signed_nda(callback: CallbackQuery, state: FSMContext):
+    print(f"DEBUG: upload_signed_nda called by user {callback.from_user.id}")
     await callback.message.answer("📎 Отправьте подписанный НДА:")
     await state.set_state(LawyerActions.signed_nda_receive)
 
 @router.message(LawyerActions.signed_nda_receive)
 async def receive_signed_nda(message: Message, state: FSMContext, bot):
+    print(f"DEBUG: receive_signed_nda called by user {message.from_user.id}")
+    print(f"DEBUG: Current state = {await state.get_state()}")
     if not message.document:
         await message.answer("❌ Пожалуйста, прикрепите подписанный NDA")
         return
@@ -120,16 +124,30 @@ async def receive_signed_nda(message: Message, state: FSMContext, bot):
     # Обновляем документ в БД
     db.add_document(user_id, 'nda', file_path, status='signed_by_user')
     
-    # Уведомляем юриста (только если LAWYER_ID валидный)
-    if LAWYER_ID and LAWYER_ID != user_id:
+    # Уведомляем юриста
+    print(f"DEBUG: LAWYER_ID = {LAWYER_ID}, user_id = {user_id}")
+    if LAWYER_ID:
         try:
-            await bot.send_message(
+            # Отправляем документ юристу
+            print(f"DEBUG: Trying to send document to lawyer...")
+            await bot.send_document(
                 LAWYER_ID,
-                f"📄 Подрядчик {user_id} загрузил подписанный НДА. Проверить документ.",
+                FSInputFile(file_path),
+                caption=f"📄 Подрядчик {user_id} загрузил подписанный НДА. Проверьте документ.",
                 reply_markup=kb.nda_review_keyboard(user_id)
             )
-        except:
-            print(f"Не удалось уведомить юриста LAWYER_ID={LAWYER_ID}")
+            print(f"DEBUG: Document sent successfully")
+        except Exception as e:
+            print(f"Не удалось уведомить юриста: {e}")
+            # Пробуем просто отправить сообщение
+            try:
+                await bot.send_message(
+                    LAWYER_ID,
+                    f"📄 Подрядчик {user_id} загрузил подписанный НДА. Проверить документ.",
+                    reply_markup=kb.nda_review_keyboard(user_id)
+                )
+            except Exception as e2:
+                print(f"Не удалось отправить сообщение юристу: {e2}")
     
     await message.answer("✅ НДА отправлен на проверку юристу")
     await state.clear()
