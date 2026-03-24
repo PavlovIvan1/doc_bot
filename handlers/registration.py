@@ -49,6 +49,32 @@ async def test_menu_admin(message: Message):
     await message.answer("⚙️ Админ-панель:", reply_markup=kb.admin_main_keyboard())
 
 
+@router.message(Command("clear_db"))
+async def cmd_clear_db(message: Message):
+    """Очистка базы данных (только для админа)"""
+    from config import MY_ID
+    if message.from_user.id != MY_ID:
+        await message.answer("❌ У вас нет доступа к этой команде")
+        return
+    
+    try:
+        db.connection.reconnect()
+        cursor = db.connection.cursor()
+        
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+        tables = ['payment_request_documents', 'payment_request_history', 'data_change_requests', 
+                  'work_reports', 'documents', 'payment_requests', 'admins', 'users']
+        for table in tables:
+            cursor.execute(f"TRUNCATE TABLE {table}")
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+        db.connection.commit()
+        cursor.close()
+        
+        await message.answer("✅ База данных очищена!\n\nТеперь можно пройти регистрацию заново: /start")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка при очистке БД: {e}")
+
+
 def convert_date_to_db_format(date_str):
     """Конвертирует дату из формата DD.MM.YYYY в YYYY-MM-DD для MySQL"""
     if not date_str or date_str == '':

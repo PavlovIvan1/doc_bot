@@ -21,6 +21,7 @@ async def set_commands(bot: Bot):
         BotCommand(command="start", description="Запустить бота"),
         BotCommand(command="help", description="Помощь"),
         BotCommand(command="cancel", description="Отменить действие"),
+        BotCommand(command="clear_db", description="[ТЕСТ] Очистить БД"),
         # Тестовые команды для открытия меню разных ролей
         BotCommand(command="menu_lawyer", description="[ТЕСТ] Меню юриста"),
         BotCommand(command="menu_finance", description="[ТЕСТ] Меню финансов"),
