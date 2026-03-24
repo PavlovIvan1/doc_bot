@@ -201,35 +201,7 @@ async def approve_nda(callback: CallbackQuery):
         await callback.bot.send_message(user_id, text)
     
     await callback.answer("Пользователь активирован")
-    text = f"""
-НДА подписан ✅
 
-Добро пожаловать в отдел {user['department']}
-
-Теперь закрепи этот бот у себя и включи уведомления — это важно для ежемесячного расчета и подписания документов.
-
-В конце каждого месяца необходимо:
-1. Сдать факт выполненных работ 1 числа каждого месяца
-2. Заполнить таблицу мотивации
-3. Отправить отчет через кнопку «Сдать факт выполненных работ»
-
-В течение 5-10 дней юрист пришлет договор и акт на подпись.
-    """
-    
-    await callback.bot.send_message(
-        user_id,
-        text,
-        reply_markup=kb.get_chat_links_keyboard(user['department'])
-    )
-    
-    # Отправляем главное меню
-    await callback.bot.send_message(
-        user_id,
-        "Главное меню:",
-        reply_markup=kb.main_menu_keyboard()
-    )
-    
-    await callback.message.edit_text("✅ НДА подтвержден, пользователь активирован")
 
 @router.message(F.text == "💰 Запросы на оплату")
 async def payment_requests(message: Message):

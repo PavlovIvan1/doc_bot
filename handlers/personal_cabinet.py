@@ -262,7 +262,7 @@ async def payment_request_project(message: Message, state: FSMContext):
 
 @router.message(PaymentRequest.contract_number)
 async def payment_request_contract(message: Message, state: FSMContext):
-    contract_num = message.text if message.text.strip() else None
+    contract_num = message.text.strip() if message.text and message.text.strip() else None
     await state.update_data(contract_number=contract_num)
     await message.answer("📎 Прикрепите файл счёта (PDF, фото или doc):")
     await state.set_state(PaymentRequest.invoice_file)
