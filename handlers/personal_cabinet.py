@@ -5,7 +5,7 @@ from datetime import datetime
 from aiogram.utils.keyboard import InlineKeyboardButton
 import os
 
-from handlers.states import MonthlyReport, BankDetails, DocumentUpload, PaymentRequest, PaymentRequestUpload
+from handlers.states import MonthlyReport, BankDetails, DocumentUpload, PaymentRequest, PaymentRequestUpload, NDAProcess
 from database import Database
 import keyboard as kb
 from config import MANAGERS
@@ -556,3 +556,86 @@ async def close_request(callback: CallbackQuery):
     await callback.message.edit_text(
         callback.message.text + "\n\n✅ Заявка закрыта!"
     )
+
+
+# ----- ОБРАБОТЧИКИ НДА -----
+
+@router.callback_query(F.data == "upload_signed_nda")
+async def upload_signed_nda(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Загрузить подписанный НДА'"""
+    user = db.get_user(callback.from_user.id)
+    if not user or user['nda_status'] not in ['sent', 'not_sent']:
+        await callback.message.answer("❌ Нет активного NDA для подписания")
+        await callback.answer()
+        return
+    
+    await callback.message.answer("📎 Отправьте подписанный НДА (PDF):")
+    await state.set_state(NDAProcess.signed_nda_upload)
+    await callback.answer()
+
+
+@router.message(NDAProcess.signed_nda_upload)
+async def receive_signed_nda(message: Message, state: FSMContext, bot):
+    """Получение подписанного NDA от пользователя"""
+    if not message.document:
+        await message.answer("❌ Пожалуйста, прикрепите файл NDA")
+        return
+    
+    user_id = message.from_user.id
+    
+    # Скачиваем файл
+    file = await bot.get_file(message.document.file_id)
+    file_path = f"downloads/nda/signed_{user_id}_{message.document.file_name}"
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    await bot.download_file(file.file_path, file_path)
+    
+    # Сохраняем в БД
+    db.add_document(user_id, 'nda', file_path, status='signed_by_user')
+    
+    # Обновляем статус
+    db.update_user(user_id, nda_status='signed_by_user')
+    
+    await message.answer("✅ НДА загружен! Юрист проверит документ и подтвердит.")
+    
+    # Уведомляем юриста
+    user = db.get_user(user_id)
+    from config import LAWYER_ID
+    await bot.send_message(
+        LAWYER_ID,
+        f"📄 Пользователь {user['full_name']} загрузил подписанный НДА.\n"
+        f"Проверьте и подтвердите.",
+        reply_markup=kb.nda_review_keyboard(user_id)
+    )
+    
+    await state.clear()
+
+
+@router.callback_query(F.data == "ask_nda_extension")
+async def ask_nda_extension(callback: CallbackQuery, state: FSMContext):
+    """Обработчик кнопки 'Запросить продление'"""
+    user = db.get_user(callback.from_user.id)
+    if not user or user['nda_status'] not in ['sent', 'not_sent']:
+        await callback.message.answer("❌ Нет активного запроса NDA")
+        await callback.answer()
+        return
+    
+    await callback.message.answer("📝 Напишите причину продления и желаемую дату:")
+    await state.set_state(NDAProcess.nda_extension_request)
+    await callback.answer()
+
+
+@router.message(NDAProcess.nda_extension_request)
+async def receive_nda_extension_request(message: Message, state: FSMContext, bot):
+    """Получение запроса на продление NDA"""
+    user = db.get_user(message.from_user.id)
+    
+    # Отправляем запрос юристу
+    from config import LAWYER_ID
+    await bot.send_message(
+        LAWYER_ID,
+        f"⏰ Запрос на продление NDA от {user['full_name']}:\n\n"
+        f"Причина и желаемая дата: {message.text}"
+    )
+    
+    await message.answer("✅ Запрос на продление отправлен юристу.")
+    await state.clear()

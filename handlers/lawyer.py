@@ -164,6 +164,44 @@ async def approve_nda(callback: CallbackQuery):
     
     # Отправляем приветствие с ссылками
     text = f"""
+✅ НДА подтвержден, пользователь активирован!
+
+Теперь вы можете:
+• Подписать NDA
+• Создать счёт
+
+Для этого нажмите /start
+    """
+    try:
+        await callback.message.answer(text)
+    except Exception:
+        await callback.bot.send_message(user_id, text)
+    
+    await callback.answer("Пользователь активирован")
+    
+    # Обновляем статус
+    db.update_user(user_id, nda_status='signed', registration_status='active')
+    
+    # Получаем данные пользователя
+    user = db.get_user(user_id)
+    
+    # Отправляем приветствие с ссылками
+    text = f"""
+✅ НДА подтвержден, пользователь активирован!
+
+Теперь вы можете:
+• Подписать NDA
+• Создать счёт
+
+Для этого нажмите /start
+    """
+    try:
+        await callback.message.answer(text)
+    except Exception:
+        await callback.bot.send_message(user_id, text)
+    
+    await callback.answer("Пользователь активирован")
+    text = f"""
 НДА подписан ✅
 
 Добро пожаловать в отдел {user['department']}

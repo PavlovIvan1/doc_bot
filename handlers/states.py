@@ -22,6 +22,8 @@ class NDAProcess(StatesGroup):
     """Состояния для подписания НДА"""
     waiting_for_nda_file = State()
     lawyer_review = State()
+    signed_nda_upload = State()  # Для загрузки подписанного НДА пользователем
+    nda_extension_request = State()  # Для запроса продления
 
 class MonthlyReport(StatesGroup):
     """Состояния для ежемесячного отчета"""
