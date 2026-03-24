@@ -10,11 +10,17 @@ def clear_users():
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor()
         
-        # Удаляем всех пользователей
+        # Сначала удаляем связанные записи
+        cursor.execute("DELETE FROM work_reports")
+        cursor.execute("DELETE FROM payment_requests")
+        cursor.execute("DELETE FROM payment_request_documents")
+        cursor.execute("DELETE FROM documents")
+        
+        # Теперь удаляем пользователей
         cursor.execute("DELETE FROM users")
         conn.commit()
         
-        print("✅ Все пользователи удалены из базы данных")
+        print("✅ Все пользователи и связанные записи удалены из базы данных")
         
         cursor.close()
         conn.close()
