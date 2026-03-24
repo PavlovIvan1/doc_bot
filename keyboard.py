@@ -92,6 +92,12 @@ def nda_keyboard():
     builder.adjust(1)
     return builder.as_markup()
 
+def skip_keyboard():
+    """Клавиатура с кнопкой пропуска"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_field")]
+    ])
+
 def nda_review_keyboard(user_id):
     """Клавиатура для юриста при проверке НДА"""
     builder = InlineKeyboardBuilder()

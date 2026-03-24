@@ -14,6 +14,41 @@ router = Router()
 db = Database()
 
 
+# ----- ТЕСТОВЫЕ КОМАНДЫ ДЛЯ ОТЛАДКИ -----
+@router.message(Command("menu_lawyer"))
+async def test_menu_lawyer(message: Message):
+    """Тестовая команда для открытия меню юриста"""
+    await message.answer("👨‍💼 Меню юриста:", reply_markup=kb.lawyer_main_keyboard())
+
+
+@router.message(Command("menu_finance"))
+async def test_menu_finance(message: Message):
+    """Тестовая команда для открытия меню финансов"""
+    await message.answer("💰 Меню финансов:", reply_markup=kb.finance_main_keyboard())
+
+
+@router.message(Command("menu_manager"))
+async def test_menu_manager(message: Message):
+    """Тестовая команда для открытия меню руководителя"""
+    await message.answer("👔 Меню руководителя:", reply_markup=kb.manager_main_keyboard())
+
+
+@router.message(Command("menu_user"))
+async def test_menu_user(message: Message):
+    """Тестовая команда для открытия меню сотрудника"""
+    user = db.get_user(message.from_user.id)
+    if user and user.get('role') in ['employee', 'manager', 'lawyer', 'finance']:
+        await message.answer("📋 Меню:", reply_markup=kb.simple_main_menu_keyboard())
+    else:
+        await message.answer("📋 Вы ещё не зарегистрированы. Нажмите /start для регистрации")
+
+
+@router.message(Command("menu_admin"))
+async def test_menu_admin(message: Message):
+    """Тестовая команда для открытия админ-панели"""
+    await message.answer("⚙️ Админ-панель:", reply_markup=kb.admin_main_keyboard())
+
+
 def convert_date_to_db_format(date_str):
     """Конвертирует дату из формата DD.MM.YYYY в YYYY-MM-DD для MySQL"""
     if not date_str or date_str == '':
