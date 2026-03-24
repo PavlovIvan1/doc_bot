@@ -37,7 +37,7 @@ async def admin_panel(message: Message):
     )
 
 
-@router.message(Command("clear_users"))
+@router.message(F.text == "/clear_users")
 async def clear_all_users(message: Message):
     """Удалить всех пользователей из БД"""
     if not await check_admin(message):
@@ -133,13 +133,37 @@ async def edit_role(callback: CallbackQuery, state: FSMContext):
     )
     await state.set_state("admin_change_role")
 
-@router.callback_query(F.data.startswith("role_"))
-async def change_role(callback: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data == "role_super_admin")
+async def change_role_to_super_admin(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     user_id = data.get('edit_role_user_id')
     
     if user_id:
-        role = callback.data.replace("role_", "")
+        role = "super_admin"
+        db.add_admin(user_id, role)
+        await callback.message.edit_text(f"✅ Роль изменена на {role}")
+    
+    await state.clear()
+
+@router.callback_query(F.data == "role_manager_admin")
+async def change_role_to_manager_admin(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    user_id = data.get('edit_role_user_id')
+    
+    if user_id:
+        role = "manager_admin"
+        db.add_admin(user_id, role)
+        await callback.message.edit_text(f"✅ Роль изменена на {role}")
+    
+    await state.clear()
+
+@router.callback_query(F.data == "role_finance_admin")
+async def change_role_to_finance_admin(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    user_id = data.get('edit_role_user_id')
+    
+    if user_id:
+        role = "finance_admin"
         db.add_admin(user_id, role)
         await callback.message.edit_text(f"✅ Роль изменена на {role}")
     
