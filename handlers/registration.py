@@ -1,4 +1,4 @@
-from aiogram import Router, F, F
+from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -47,6 +47,28 @@ async def test_menu_user(message: Message):
 async def test_menu_admin(message: Message):
     """Тестовая команда для открытия админ-панели"""
     await message.answer("⚙️ Админ-панель:", reply_markup=kb.admin_main_keyboard())
+
+
+@router.message(Command("main_menu"))
+async def cmd_main_menu(message: Message):
+    """Показать главное меню (для обычных пользователей)"""
+    user_id = message.from_user.id
+    user = db.get_user(user_id)
+    
+    if not user:
+        await message.answer("📋 Вы не зарегистрированы. Нажмите /start для регистрации")
+        return
+    
+    if user['registration_status'] == 'active':
+        await message.answer("📋 Выбери действие:", reply_markup=kb.simple_main_menu_keyboard())
+    elif user['registration_status'] == 'pending':
+        await message.answer("⏳ Ваша регистрация на проверке. Ожидайте ответа юриста.")
+    elif user['registration_status'] == 'nda_pending':
+        await message.answer("📄 Ожидайте НДА на подписание от юриста.")
+    elif user['registration_status'] == 'fired':
+        await message.answer("❌ Доступ заблокирован. Обратитесь к руководителю.")
+    else:
+        await message.answer("📋 Выбери действие:", reply_markup=kb.simple_main_menu_keyboard())
 
 
 @router.message(Command("clear_db"))
@@ -122,30 +144,8 @@ def convert_date_to_db_format(date_str):
 
 
 @router.message(Command("start"))
-async def cmd_start(message: Message, state: FSMContext):
+async def cmd_start(message: Message):
     user_id = message.from_user.id
-    
-    # Для админа (MY_ID) всегда запускаем регистрацию
-    from config import MY_ID
-    if user_id == MY_ID:
-        await state.clear()
-        user = db.get_user(user_id)
-        if user:
-            # Если пользователь есть, предлагаем выбор - меню или регистрация
-            await message.answer(
-                f"Привет! Вы уже зарегистрированы как {user.get('role', 'unknown')}\n\n"
-                "Что делаем?",
-                reply_markup=kb.admin_start_keyboard()
-            )
-            return
-        else:
-            # Если нет - начинаем регистрацию
-            await state.set_state(Registration.waiting_for_full_name)
-            await message.answer(
-                "📝 Начнём регистрацию!\n\nВведите ваше ФИО (Полностью):",
-                reply_markup=kb.cancel_keyboard()
-            )
-            return
     
     # Проверяем, если user_id соответствует одной из ролей (из .env)
     if user_id == LAWYER_ID:
@@ -165,6 +165,26 @@ async def cmd_start(message: Message, state: FSMContext):
     user = db.get_user(user_id)
     
     if user:
+        if user['registration_status'] == 'active':
+            # По ТЗ - 2 кнопки: Подписать NDA и Создать счёт
+            await message.answer(
+                "Выбери действие:",
+                reply_markup=kb.simple_main_menu_keyboard()
+            )
+        elif user['registration_status'] == 'pending':
+            await message.answer(
+                "⏳ Ваша регистрация на проверке. Ожидайте ответа юриста."
+            )
+        elif user['registration_status'] == 'nda_pending':
+            await message.answer(
+                "📄 Ожидайте НДА на подписание от юриста."
+            )
+        elif user['registration_status'] == 'fired':
+            await message.answer(
+                "❌ Доступ заблокирован. Обратитесь к руководителю."
+            )
+    else:
+        text = """
         if user['registration_status'] == 'active':
             # По ТЗ - 2 кнопки: Подписать NDA и Создать счёт
             await message.answer(
