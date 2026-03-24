@@ -68,7 +68,7 @@ async def cmd_start(message: Message):
 @router.callback_query(F.data == "start_registration")
 async def start_registration(event, state: FSMContext):
     await state.clear()
-    await state.set_state(Registration.waiting_for_full_name)
+    await state.set_state(Registration.full_name)
     
     text = f"Перед стартом: ты даешь согласие на обработку персональных данных ([ссылка]({CONSENT_LINK})) с целью оформления документов (нда, договор, акт выполненных работ), а также выплат согласно акту внутри компании.\n\nВведите ваше ФИО (Полностью):"
     
@@ -78,48 +78,48 @@ async def start_registration(event, state: FSMContext):
         await event.message.edit_text(text, reply_markup=kb.cancel_keyboard())
 
 
-@router.message(Registration.waiting_for_full_name)
+@router.message(Registration.full_name)
 async def get_full_name(message: Message, state: FSMContext):
     full_name = message.text.strip()
     if len(full_name.split()) < 2:
         await message.answer("❌ Введите полное ФИО (минимум 2 слова)")
         return
     await state.update_data(full_name=full_name)
-    await state.set_state(Registration.waiting_for_inn)
+    await state.set_state(Registration.inn)
     await message.answer("Введите ИНН:")
 
 
-@router.message(Registration.waiting_for_inn)
+@router.message(Registration.inn)
 async def get_inn(message: Message, state: FSMContext):
     inn = message.text.strip()
     if not inn.isdigit() or len(inn) not in [10, 12]:
         await message.answer("❌ ИНН должен быть 10 или 12 цифр")
         return
     await state.update_data(inn=inn)
-    await state.set_state(Registration.waiting_for_phone)
+    await state.set_state(Registration.phone)
     await message.answer("Введите номер телефона:")
 
 
-@router.message(Registration.waiting_for_phone)
+@router.message(Registration.phone)
 async def get_phone(message: Message, state: FSMContext):
     phone = message.text.strip()
     await state.update_data(phone=phone)
-    await state.set_state(Registration.waiting_for_email)
+    await state.set_state(Registration.email)
     await message.answer("Введите Email:")
 
 
-@router.message(Registration.waiting_for_email)
+@router.message(Registration.email)
 async def get_email(message: Message, state: FSMContext):
     email = message.text.strip()
     if '@' not in email:
         await message.answer("❌ Введите корректный Email")
         return
     await state.update_data(email=email)
-    await state.set_state(Registration.waiting_for_start_date)
+    await state.set_state(Registration.start_date)
     await message.answer("Введите дату начала работы (ДД.ММ.ГГГГ):")
 
 
-@router.message(Registration.waiting_for_start_date)
+@router.message(Registration.start_date)
 async def get_start_date(message: Message, state: FSMContext):
     start_date = message.text.strip()
     try:
@@ -128,11 +128,11 @@ async def get_start_date(message: Message, state: FSMContext):
         await message.answer("❌ Введите дату в формате ДД.ММ.ГГГГ")
         return
     await state.update_data(start_date=start_date)
-    await state.set_state(Registration.waiting_for_department)
+    await state.set_state(Registration.department)
     await message.answer("Выберите отдел:", reply_markup=kb.department_selection_keyboard())
 
 
-@router.message(Registration.waiting_for_department)
+@router.message(Registration.department)
 async def get_department(message: Message, state: FSMContext):
     department = message.text
     if department not in ["Отдел контента", "Отдел маркетинга", "Отдел продаж", 
@@ -141,19 +141,19 @@ async def get_department(message: Message, state: FSMContext):
         await message.answer("❌ Выберите отдел из списка")
         return
     await state.update_data(department=department)
-    await state.set_state(Registration.waiting_for_tax_type)
+    await state.set_state(Registration.tax_type)
     await message.answer("Выберите систему налогообложения:", reply_markup=kb.tax_type_keyboard())
 
 
-@router.message(Registration.waiting_for_tax_type)
+@router.message(Registration.tax_type)
 async def get_tax_type(message: Message, state: FSMContext):
     tax_type = message.text
     await state.update_data(tax_type=tax_type)
-    await state.set_state(Registration.waiting_for_address)
+    await state.set_state(Registration.address)
     await message.answer("Введите адрес (фактический):")
 
 
-@router.message(Registration.waiting_for_address)
+@router.message(Registration.address)
 async def get_address(message: Message, state: FSMContext):
     address = message.text.strip()
     if len(address) < 5:
