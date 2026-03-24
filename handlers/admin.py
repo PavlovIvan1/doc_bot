@@ -36,6 +36,19 @@ async def admin_panel(message: Message):
         reply_markup=kb.admin_main_keyboard()
     )
 
+
+@router.message(Command("clear_users"))
+async def clear_all_users(message: Message):
+    """Удалить всех пользователей из БД"""
+    if not await check_admin(message):
+        return
+    
+    cursor = db.connection.cursor()
+    cursor.execute("DELETE FROM users")
+    db.connection.commit()
+    
+    await message.answer("✅ Все пользователи удалены из базы данных")
+
 @router.message(F.text == "👥 Управление пользователями")
 async def manage_users(message: Message):
     if not await check_admin(message):
