@@ -279,7 +279,6 @@ async def reg_department(callback: CallbackQuery, state: FSMContext):
 📧 Email: {data['email']}
 📅 Дата начала: {data['start_date']}
 💰 Налогообложение: {data['tax_type']}
-🏢 Отдел: {data['department']}
 📍 Адрес: {data['address']}
 
 Если всё верно - нажмите Подтвердить
