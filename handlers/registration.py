@@ -13,6 +13,18 @@ from config import LAWYER_ID, FINANCE_DIRECTOR_ID, ACCOUNTANT_ID, MANAGERS, CONS
 router = Router()
 db = Database()
 
+
+def convert_date_to_db_format(date_str):
+    """Конвертирует дату из формата DD.MM.YYYY в YYYY-MM-DD для MySQL"""
+    if not date_str or date_str == '':
+        return None
+    try:
+        dt = datetime.strptime(date_str, "%d.%m.%Y")
+        return dt.strftime("%Y-%m-%d")
+    except ValueError:
+        return None
+
+
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     user_id = message.from_user.id
@@ -286,15 +298,15 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext, bot):
         telegram_login=callback.from_user.username,
         full_name=data['full_name'],
         passport_data=data.get('passport_data', ''),
-        passport_date=data.get('passport_date', ''),
+        passport_date=convert_date_to_db_format(data.get('passport_date', '')),
         passport_issued=data.get('passport_issued', ''),
         passport_code=data.get('passport_code', ''),
-        birth_date=data['birth_date'],
+        birth_date=convert_date_to_db_format(data['birth_date']),
         registration_address=data['address'],
         inn=data['inn'],
         phone=data['phone'],
         email=data['email'],
-        start_date=data['start_date'],
+        start_date=convert_date_to_db_format(data['start_date']),
         tax_type=data['tax_type'],
         tax_document_path=data.get('tax_document_path'),
         department=data['department'],

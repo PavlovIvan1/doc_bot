@@ -116,7 +116,8 @@ def manager_main_keyboard():
     """Главное меню руководителя"""
     buttons = [
         [KeyboardButton(text="👥 Выбрать отдел")],
-        [KeyboardButton(text="📊 Отчеты на проверку")],
+        [KeyboardButton(text="📊 Отчёты на проверку")],
+        [KeyboardButton(text="💰 Заявки на оплату")],
         [KeyboardButton(text="🔄 Изменить должность")],
         [KeyboardButton(text="🚫 Уволить сотрудника")]
     ]

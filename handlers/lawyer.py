@@ -238,3 +238,18 @@ async def process_payment(callback: CallbackQuery):
     )
     
     await callback.message.edit_text(callback.message.text + "\n\n✅ Передано на оплату")
+
+# ----- Кнопки юриста: Подписанные документы и Чеки (пока заглушки) -----
+@router.message(F.text == "📎 Подписанные документы")
+async def signed_documents(message: Message):
+    if not await check_lawyer(message):
+        return
+    
+    await message.answer("📎 Раздел находится в разработке. Здесь будут отображаться подписанные документы.")
+
+@router.message(F.text == "🧾 Чеки")
+async def checks(message: Message):
+    if not await check_lawyer(message):
+        return
+    
+    await message.answer("🧾 Раздел находится в разработке. Здесь будут отображаться чеки.")

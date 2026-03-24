@@ -134,6 +134,43 @@ async def send_correction(message: Message, state: FSMContext):
     await message.answer("✅ Комментарий отправлен сотруднику")
     await state.clear()
 
+@router.callback_query(F.data == "manager_change_position")
+async def change_position_employee_list(callback: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    department = data.get('selected_department')
+    
+    employees = db.get_users_by_department(department)
+    
+    await callback.message.edit_text(
+        "Выберите сотрудника для изменения должности:",
+        reply_markup=kb.employee_list_keyboard(employees, "position")
+    )
+
+@router.callback_query(F.data.startswith("position_"))
+async def change_position_employee(callback: CallbackQuery, state: FSMContext):
+    user_id = int(callback.data.replace("position_", ""))
+    await state.update_data(change_position_user_id=user_id)
+    
+    await callback.message.answer("Введите новую должность:")
+    await state.set_state(ManagerActions.change_position)
+
+@router.message(ManagerActions.change_position)
+async def set_new_position(message: Message, state: FSMContext):
+    data = await state.get_data()
+    user_id = data['change_position_user_id']
+    
+    # Обновляем должность
+    db.update_user(user_id, position=message.text)
+    
+    # Уведомляем сотрудника
+    await message.bot.send_message(
+        user_id,
+        f"🔄 Ваша должность изменена на: {message.text}"
+    )
+    
+    await message.answer("✅ Должность изменена")
+    await state.clear()
+
 # Увольнение сотрудника
 @router.callback_query(F.data == "manager_fire")
 async def fire_employee_list(callback: CallbackQuery, state: FSMContext):
