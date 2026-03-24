@@ -261,10 +261,7 @@ async def payment_request_counterparty(message: Message, state: FSMContext):
 @router.message(PaymentRequest.project)
 async def payment_request_project(message: Message, state: FSMContext):
     await state.update_data(project=message.text)
-    await message.answer(
-        "📋 Введите номер договора подряда (если есть, или пропустите):",
-        reply_markup=kb.skip_keyboard()
-    )
+    await message.answer("📋 Введите номер договора подряда (если есть, или пропустите):")
     await state.set_state(PaymentRequest.contract_number)
 
 @router.message(PaymentRequest.contract_number)
@@ -628,20 +625,6 @@ async def ask_nda_extension(callback: CallbackQuery, state: FSMContext):
     
     await callback.message.answer("📝 Напишите причину продления и желаемую дату:")
     await state.set_state(NDAProcess.nda_extension_request)
-    await callback.answer()
-
-
-@router.callback_query(F.data == "skip_field")
-async def skip_field(callback: CallbackQuery, state: FSMContext):
-    """Обработчик кнопки 'Пропустить' при вводе номера договора"""
-    current_state = await state.get_state()
-    
-    if current_state == PaymentRequest.contract_number:
-        # Пропускаем номер договора, оставляем пустым
-        await state.update_data(contract_number="")
-        await callback.message.answer("📎 Укажите сумму к оплате:")
-        await state.set_state(PaymentRequest.amount)
-    
     await callback.answer()
 
 
