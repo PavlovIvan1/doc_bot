@@ -44,7 +44,7 @@ class Database:
                 position VARCHAR(255),
                 bank_details TEXT,
                 registration_status ENUM('draft', 'pending', 'nda_pending', 'active', 'rejected', 'fired') DEFAULT 'draft',
-                nda_status ENUM('not_sent', 'sent', 'signed', 'rejected') DEFAULT 'not_sent',
+                nda_status ENUM('not_sent', 'sent', 'signed', 'rejected', 'signed_by_user') DEFAULT 'not_sent',
                 nda_file_path VARCHAR(500),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE KEY unique_email (email)
@@ -57,6 +57,13 @@ class Database:
             self.connection.commit()
         except:
             pass  # Колонка уже существует
+        
+        # Миграция: добавляем 'signed_by_user' в nda_status ENUM
+        try:
+            cursor.execute("ALTER TABLE users MODIFY COLUMN nda_status ENUM('not_sent', 'sent', 'signed', 'rejected', 'signed_by_user') DEFAULT 'not_sent'")
+            self.connection.commit()
+        except:
+            pass  # Уже обновлено
         
         # Таблица для отчетов о работе
         cursor.execute("""

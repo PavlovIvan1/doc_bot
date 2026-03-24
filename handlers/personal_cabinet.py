@@ -573,7 +573,7 @@ async def upload_signed_nda(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
         return
     
-    await callback.message.answer("📎 Отправьте подписанный НДА (PDF):")
+    await callback.message.answer("📎 Отправьте подписанный НДА:")
     await state.set_state(NDAProcess.signed_nda_upload)
     await callback.answer()
 
@@ -597,7 +597,7 @@ async def receive_signed_nda(message: Message, state: FSMContext, bot):
     db.add_document(user_id, 'nda', file_path, status='signed_by_user')
     
     # Обновляем статус
-    db.update_user(user_id, nda_status='signed_by_user')
+    db.update_user(user_id, nda_status='signed')
     
     await message.answer("✅ НДА загружен! Юрист проверит документ и подтвердит.")
     
