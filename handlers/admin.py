@@ -89,8 +89,11 @@ async def add_user_id(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("❌ Введите корректный Telegram ID (только цифры)")
 
-@router.callback_query(AdminActions.set_role, F.data.startswith("role_"))
+@router.callback_query(AdminActions.set_role)
 async def set_user_role(callback: CallbackQuery, state: FSMContext):
+    data = callback.data
+    if data.startswith("role_"):
+        role = data.replace("role_", "")
     role = callback.data.replace("role_", "")
     data = await state.get_data()
     user_id = data['new_user_id']
