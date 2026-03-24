@@ -100,12 +100,6 @@ async def save_nda(message: Message, state: FSMContext, bot):
     await message.answer(f"✅ НДА отправлен пользователю {user_id}")
     await state.clear()
 
-@router.callback_query(F.data == "upload_signed_nda")
-async def upload_signed_nda(callback: CallbackQuery, state: FSMContext):
-    print(f"DEBUG: upload_signed_nda called by user {callback.from_user.id}")
-    await callback.message.answer("📎 Отправьте подписанный НДА:")
-    await state.set_state(LawyerActions.signed_nda_receive)
-
 @router.message(LawyerActions.signed_nda_receive)
 async def receive_signed_nda(message: Message, state: FSMContext, bot):
     print(f"DEBUG: receive_signed_nda called by user {message.from_user.id}")
