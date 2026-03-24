@@ -272,6 +272,15 @@ async def accountant_mark_paid(callback: CallbackQuery):
     
     # Уведомляем сотрудника
     request = db.get_payment_request(request_id)
+    
+    # Создаём клавиатуру с кнопками для загрузки документов
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    doc_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📎 Прикрепить акт", callback_data=f"upload_act_{request_id}")],
+        [InlineKeyboardButton(text="📑 Прикрепить договор", callback_data=f"upload_contract_{request_id}")],
+        [InlineKeyboardButton(text="🧾 Прикрепить чек", callback_data=f"upload_check_{request_id}")]
+    ])
+    
     await callback.bot.send_message(
         request['user_id'],
         f"✅ Заявка #{request_id} оплачена!\n\n"
@@ -279,7 +288,8 @@ async def accountant_mark_paid(callback: CallbackQuery):
         "📎 Пожалуйста, прикрепите:\n"
         "- Подписанный акт\n"
         "- Подписанный договор (если требуется)\n"
-        "🧾 Чек из «Мой налог» (для самозанятых)"
+        "🧾 Чек из «Мой налог» (для самозанятых)",
+        reply_markup=doc_keyboard
     )
     
     await callback.message.edit_text(callback.message.text + "\n\n✅ Оплата подтверждена!")

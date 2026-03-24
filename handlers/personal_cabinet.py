@@ -13,6 +13,10 @@ from config import MANAGERS
 router = Router()
 db = Database()
 
+# Создаём директории для загрузок если не существуют
+os.makedirs("downloads/payment_requests", exist_ok=True)
+os.makedirs("downloads/nda", exist_ok=True)
+
 # Проверка доступа
 async def check_active_user(message: Message):
     user = db.get_user(message.from_user.id)
