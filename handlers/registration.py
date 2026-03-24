@@ -1,4 +1,4 @@
-from aiogram import Router, F
+from aiogram import Router, F, F
 from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -50,7 +50,7 @@ async def test_menu_admin(message: Message):
 
 
 @router.message(Command("clear_db"))
-async def cmd_clear_db(message: Message):
+async def cmd_clear_db(message: Message, state: FSMContext):
     """Очистка базы данных (только для админа)"""
     from config import MY_ID
     if message.from_user.id != MY_ID:
@@ -70,9 +70,44 @@ async def cmd_clear_db(message: Message):
         db.connection.commit()
         cursor.close()
         
+        await state.clear()
         await message.answer("✅ База данных очищена!\n\nТеперь можно пройти регистрацию заново: /start")
     except Exception as e:
         await message.answer(f"❌ Ошибка при очистке БД: {e}")
+
+
+# Обработчики кнопок админ клавиатуры
+@router.message(F.text == "🔄 Перерегистрироваться")
+async def reregister(message: Message, state: FSMContext):
+    """Перерегистрация - запускает процесс регистрации заново"""
+    await state.clear()
+    await state.set_state(Registration.waiting_for_full_name)
+    await message.answer(
+        "📝 Начнём регистрацию заново!\n\nВведите ваше ФИО (Полностью):",
+        reply_markup=kb.cancel_keyboard()
+    )
+
+
+@router.message(F.text == "👨‍💼 Меню юриста")
+async def menu_lawyer_btn(message: Message):
+    await message.answer("👨‍💼 Меню юриста:", reply_markup=kb.lawyer_main_keyboard())
+
+
+@router.message(F.text == "💰 Меню финансов")
+async def menu_finance_btn(message: Message):
+    await message.answer("💰 Меню финансов:", reply_markup=kb.finance_main_keyboard())
+
+
+@router.message(F.text == "👔 Меню руководителя")
+async def menu_manager_btn(message: Message):
+    await message.answer("👔 Меню руководителя:", reply_markup=kb.manager_main_keyboard())
+
+
+@router.message(F.text == "❌ Отмена")
+async def cancel_registration(message: Message, state: FSMContext):
+    """Отмена регистрации"""
+    await state.clear()
+    await message.answer("❌ Регистрация отменена. Используйте /start для начала заново.", reply_markup=kb.admin_start_keyboard())
 
 
 def convert_date_to_db_format(date_str):
@@ -87,10 +122,32 @@ def convert_date_to_db_format(date_str):
 
 
 @router.message(Command("start"))
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, state: FSMContext):
     user_id = message.from_user.id
     
-    # Проверяем, если user_id соответствует одной из ролей
+    # Для админа (MY_ID) всегда запускаем регистрацию
+    from config import MY_ID
+    if user_id == MY_ID:
+        await state.clear()
+        user = db.get_user(user_id)
+        if user:
+            # Если пользователь есть, предлагаем выбор - меню или регистрация
+            await message.answer(
+                f"Привет! Вы уже зарегистрированы как {user.get('role', 'unknown')}\n\n"
+                "Что делаем?",
+                reply_markup=kb.admin_start_keyboard()
+            )
+            return
+        else:
+            # Если нет - начинаем регистрацию
+            await state.set_state(Registration.waiting_for_full_name)
+            await message.answer(
+                "📝 Начнём регистрацию!\n\nВведите ваше ФИО (Полностью):",
+                reply_markup=kb.cancel_keyboard()
+            )
+            return
+    
+    # Проверяем, если user_id соответствует одной из ролей (из .env)
     if user_id == LAWYER_ID:
         await message.answer("👨‍💼 Меню юриста:", reply_markup=kb.lawyer_main_keyboard())
         return

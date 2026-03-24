@@ -98,6 +98,26 @@ def skip_keyboard():
         [InlineKeyboardButton(text="⏭ Пропустить", callback_data="skip_field")]
     ])
 
+
+def cancel_keyboard():
+    """Клавиатура с кнопкой отмены"""
+    buttons = [
+        [KeyboardButton(text="❌ Отмена")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+
+def admin_start_keyboard():
+    """Клавиатура для админа при старте"""
+    buttons = [
+        [KeyboardButton(text="🔄 Перерегистрироваться")],
+        [KeyboardButton(text="👨‍💼 Меню юриста")],
+        [KeyboardButton(text="💰 Меню финансов")],
+        [KeyboardButton(text="👔 Меню руководителя")]
+    ]
+    return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+
+
 def nda_review_keyboard(user_id):
     """Клавиатура для юриста при проверке НДА"""
     builder = InlineKeyboardBuilder()
