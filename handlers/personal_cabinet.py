@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, FSInputFile
 from aiogram.fsm.context import FSMContext
 from datetime import datetime
 from aiogram.utils.keyboard import InlineKeyboardButton
@@ -614,10 +614,13 @@ async def receive_signed_nda(message: Message, state: FSMContext, bot):
     # Уведомляем юриста
     user = db.get_user(user_id)
     from config import LAWYER_ID
-    await bot.send_message(
+    await bot.send_document(
         LAWYER_ID,
-        f"📄 Пользователь {user['full_name']} загрузил подписанный НДА.\n"
-        f"Проверьте и подтвердите.",
+        message.document.file_id,
+        caption=(
+            f"📄 Пользователь {user['full_name']} (ID: {user_id}) загрузил подписанный НДА.\n"
+            f"Проверьте и подтвердите."
+        ),
         reply_markup=kb.nda_review_keyboard(user_id)
     )
     

@@ -149,52 +149,31 @@ async def receive_signed_nda(message: Message, state: FSMContext, bot):
 @router.callback_query(F.data.startswith("approve_nda_"))
 async def approve_nda(callback: CallbackQuery):
     user_id = int(callback.data.replace("approve_nda_", ""))
-    
-    # Обновляем статус
+
+    # Активируем пользователя после подтверждения NDA
     db.update_user(user_id, nda_status='signed', registration_status='active')
-    
-    # Получаем данные пользователя
-    user = db.get_user(user_id)
-    
-    # Отправляем приветствие с ссылками
-    text = f"""
-✅ НДА подтвержден, пользователь активирован!
 
-Теперь вы можете:
-• Подписать NDA
-• Создать счёт
-
-Для этого нажмите /start
-    """
+    # Сообщение тому, кто подтверждает (юрист/админ)
+    lawyer_text = "✅ НДА подтвержден, пользователь активирован!"
     try:
-        await callback.message.answer(text)
+        await callback.message.answer(lawyer_text)
     except Exception:
-        await callback.bot.send_message(user_id, text)
-    
-    await callback.answer("Пользователь активирован")
-    
-    # Обновляем статус
-    db.update_user(user_id, nda_status='signed', registration_status='active')
-    
-    # Получаем данные пользователя
-    user = db.get_user(user_id)
-    
-    # Отправляем приветствие с ссылками
-    text = f"""
-✅ НДА подтвержден, пользователь активирован!
+        pass
 
-Теперь вы можете:
-• Подписать NDA
-• Создать счёт
+    # Сообщение сотруднику с дальнейшими шагами
+    user_text = (
+        "✅ НДА подтвержден, пользователь активирован!\n\n"
+        "Теперь вы можете:\n"
+        "• Подписать NDA\n"
+        "• Создать счёт\n\n"
+        "Для этого нажмите /start"
+    )
 
-Для этого нажмите /start
-    """
-    try:
-        await callback.message.answer(text)
-    except Exception:
-        await callback.bot.send_message(user_id, text)
-    
-    await callback.answer("Пользователь активирован")
+    # Если подтверждение делает сам сотрудник (тестовый кейс) — не дублируем сообщение
+    if user_id != callback.from_user.id:
+        await callback.bot.send_message(user_id, user_text)
+
+    await callback.answer("НДА подтвержден")
 
 
 @router.message(F.text == "💰 Запросы на оплату")
