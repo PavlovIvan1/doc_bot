@@ -7,7 +7,7 @@ from aiogram.types import BotCommand
 
 from config import BOT_TOKEN
 from handlers import registration, personal_cabinet, manager, lawyer, finance, admin
-
+#
 logging.basicConfig(level=logging.INFO)
 
 # Создаем папки для загрузок
