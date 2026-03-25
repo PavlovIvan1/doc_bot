@@ -20,6 +20,9 @@ FINANCE_DIRECTOR_ID = int(os.getenv("FINANCE_DIRECTOR_ID", 0))
 ACCOUNTANT_ID = int(os.getenv("ACCOUNTANT_ID", 0))
 MY_ID = int(os.getenv("MY_ID", 0))
 
+# Флаг для пропуска регистрации для特定ных ролей
+LAWYER_SKIP_REGISTRATION = os.getenv("LAWYER_SKIP_REGISTRATION", "false").lower() == "true"
+
 # Ссылки на чаты отделов
 DEPARTMENT_CHATS = {
     'Отдел контента': os.getenv("CHAT_CONTENT"),

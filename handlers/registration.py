@@ -8,7 +8,7 @@ import os
 from handlers.states import Registration
 from database import Database
 import keyboard as kb
-from config import LAWYER_ID, FINANCE_DIRECTOR_ID, ACCOUNTANT_ID, MANAGERS, CONSENT_LINK
+from config import LAWYER_ID, FINANCE_DIRECTOR_ID, ACCOUNTANT_ID, MANAGERS, CONSENT_LINK, LAWYER_SKIP_REGISTRATION
 
 router = Router()
 db = Database()
@@ -30,8 +30,26 @@ async def cmd_start(message: Message):
     user_id = message.from_user.id
     
     # Проверяем, если user_id соответствует одной из ролей
-    if user_id == LAWYER_ID:
+    # Если LAWYER_SKIP_REGISTRATION=true, то юрист сразу получает меню без регистрации
+    if LAWYER_SKIP_REGISTRATION and user_id == LAWYER_ID:
         await message.answer("👨‍💼 Меню юриста:", reply_markup=kb.lawyer_main_keyboard())
+        return
+    elif user_id == LAWYER_ID:
+        # Проверяем, есть ли пользователь в БД
+        user = db.get_user(user_id)
+        if user and user.get('registration_status') == 'active':
+            await message.answer("👨‍💼 Меню юриста:", reply_markup=kb.lawyer_main_keyboard())
+            return
+        # Иначе начинаем регистрацию
+        text = """
+Привет, коллега 👋
+Я бот-помощник по документообороту
+
+Сейчас тебе важно заполнить карточку контрагента. Ошибка в одном поле = задержка нда/договора/оплаты.
+
+Жми ниже👇
+        """
+        await message.answer(text, reply_markup=kb.registration_start_keyboard())
         return
     elif user_id == FINANCE_DIRECTOR_ID:
         await message.answer("💰 Меню финансового директора:", reply_markup=kb.finance_main_keyboard())

@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 from aiogram.fsm.context import FSMContext
 from datetime import datetime
 from aiogram.utils.keyboard import InlineKeyboardButton
@@ -261,7 +261,10 @@ async def payment_request_counterparty(message: Message, state: FSMContext):
 @router.message(PaymentRequest.project)
 async def payment_request_project(message: Message, state: FSMContext):
     await state.update_data(project=message.text)
-    await message.answer("📋 Введите номер договора подряда (если есть, или пропустите):")
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Пропустить", callback_data="skip_contract")]
+    ])
+    await message.answer("📋 Введите номер договора подряда (если есть, или пропустите):", reply_markup=keyboard)
     await state.set_state(PaymentRequest.contract_number)
 
 @router.message(PaymentRequest.contract_number)
@@ -269,6 +272,13 @@ async def payment_request_contract(message: Message, state: FSMContext):
     contract_num = message.text.strip() if message.text and message.text.strip() else None
     await state.update_data(contract_number=contract_num)
     await message.answer("📎 Прикрепите файл счёта (PDF, фото или doc):")
+    await state.set_state(PaymentRequest.invoice_file)
+
+@router.callback_query(F.data == "skip_contract")
+async def skip_contract(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    await state.update_data(contract_number=None)
+    await callback.message.answer("📎 Прикрепите файл счёта (PDF, фото или doc):")
     await state.set_state(PaymentRequest.invoice_file)
 
 @router.message(PaymentRequest.invoice_file)
