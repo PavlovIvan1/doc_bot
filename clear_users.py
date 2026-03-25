@@ -10,14 +10,24 @@ def clear_users():
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor()
         
-        # Сначала удаляем связанные записи
-        cursor.execute("DELETE FROM work_reports")
-        cursor.execute("DELETE FROM payment_requests")
+        # Отключаем проверку foreign keys
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 0")
+        
+        # Удаляем все связанные записи в правильном порядке
         cursor.execute("DELETE FROM payment_request_documents")
+        cursor.execute("DELETE FROM payment_request_history")
+        cursor.execute("DELETE FROM payment_requests")
+        cursor.execute("DELETE FROM work_reports")
         cursor.execute("DELETE FROM documents")
+        cursor.execute("DELETE FROM data_change_requests")
+        cursor.execute("DELETE FROM admins")
         
         # Теперь удаляем пользователей
         cursor.execute("DELETE FROM users")
+        
+        # Включаем проверку foreign keys обратно
+        cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
+        
         conn.commit()
         
         print("✅ Все пользователи и связанные записи удалены из базы данных")
