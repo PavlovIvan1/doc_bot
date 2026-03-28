@@ -20,6 +20,25 @@ FINANCE_DIRECTOR_ID = int(os.getenv("FINANCE_DIRECTOR_ID", 0))
 ACCOUNTANT_ID = int(os.getenv("ACCOUNTANT_ID", 0))
 MY_ID = int(os.getenv("MY_ID", 0))
 
+# Whitelist пользователей (доступ к боту только для этих ID)
+# Формат в .env: WHITELIST_IDS=12345,67890,11111
+WHITELIST_IDS = set()
+raw_whitelist = os.getenv("WHITELIST_IDS", "")
+if raw_whitelist.strip():
+    for item in raw_whitelist.split(","):
+        item = item.strip()
+        if item.isdigit():
+            WHITELIST_IDS.add(int(item))
+
+# Технические роли всегда добавляем в whitelist автоматически
+for technical_id in [LAWYER_ID, FINANCE_DIRECTOR_ID, ACCOUNTANT_ID, MY_ID]:
+    if technical_id:
+        WHITELIST_IDS.add(technical_id)
+
+
+def is_whitelisted(user_id: int) -> bool:
+    return user_id in WHITELIST_IDS
+
 # Флаг для пропуска регистрации для特定ных ролей
 LAWYER_SKIP_REGISTRATION = os.getenv("LAWYER_SKIP_REGISTRATION", "false").lower() == "true"
 

@@ -8,12 +8,17 @@ from handlers.states import LawyerActions
 from database import Database
 import keyboard as kb
 from config import LAWYER_ID, FINANCE_DIRECTOR_ID
+from config import is_whitelisted
 
 router = Router()
 db = Database()
 
 async def check_lawyer(message: Message):
     """Проверка, что пользователь - юрист"""
+    if not is_whitelisted(message.from_user.id):
+        await message.answer("⛔ Доступ к боту ограничен. Обратитесь к администратору.")
+        return False
+
     if message.from_user.id != LAWYER_ID:
         await message.answer("❌ У вас нет доступа к этому разделу")
         return False

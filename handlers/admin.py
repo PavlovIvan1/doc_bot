@@ -8,6 +8,7 @@ from handlers.states import AdminActions
 from database import Database
 import keyboard as kb
 from config import MANAGERS, DEPARTMENTS
+from config import is_whitelisted
 
 router = Router()
 db = Database()
@@ -17,6 +18,10 @@ ADMIN_IDS = []
 
 async def check_admin(message: Message):
     """Проверка, что пользователь - админ"""
+    if not is_whitelisted(message.from_user.id):
+        await message.answer("⛔ Доступ к боту ограничен. Обратитесь к администратору.")
+        return False
+
     if message.from_user.id not in ADMIN_IDS:
         # Также проверяем в БД
         admin = db.get_admin(message.from_user.id)
@@ -207,6 +212,47 @@ async def block_user(callback: CallbackQuery):
     )
     
     await callback.message.edit_text(f"✅ Пользователь {user_id} заблокирован")
+
+
+@router.message(F.text == "🗑 Удалить пользователя")
+async def delete_user_start(message: Message):
+    if not await check_admin(message):
+        return
+
+    cursor = db.connection.cursor(dictionary=True)
+    cursor.execute("SELECT user_id, full_name FROM users")
+    users = cursor.fetchall()
+
+    if not users:
+        await message.answer("Нет пользователей для удаления")
+        return
+
+    builder = InlineKeyboardBuilder()
+    for user in users:
+        builder.add(InlineKeyboardButton(
+            text=f"🗑 {user['full_name']}",
+            callback_data=f"delete_user_{user['user_id']}"
+        ))
+    builder.adjust(1)
+
+    await message.answer("Выберите пользователя для удаления:", reply_markup=builder.as_markup())
+
+
+@router.callback_query(F.data.startswith("delete_user_"))
+async def delete_user(callback: CallbackQuery):
+    user_id = int(callback.data.replace("delete_user_", ""))
+
+    cursor = db.connection.cursor()
+    cursor.execute("DELETE FROM payment_request_documents WHERE payment_request_id IN (SELECT id FROM payment_requests WHERE user_id = %s)", (user_id,))
+    cursor.execute("DELETE FROM payment_request_history WHERE payment_request_id IN (SELECT id FROM payment_requests WHERE user_id = %s)", (user_id,))
+    cursor.execute("DELETE FROM payment_requests WHERE user_id = %s", (user_id,))
+    cursor.execute("DELETE FROM documents WHERE user_id = %s", (user_id,))
+    cursor.execute("DELETE FROM work_reports WHERE user_id = %s", (user_id,))
+    cursor.execute("DELETE FROM data_change_requests WHERE user_id = %s", (user_id,))
+    cursor.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
+    db.connection.commit()
+
+    await callback.message.edit_text(f"✅ Пользователь {user_id} удалён")
 
 @router.message(F.text == "📊 Статистика")
 async def statistics(message: Message):

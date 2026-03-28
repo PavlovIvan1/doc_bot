@@ -7,12 +7,17 @@ from handlers.states import ManagerActions
 from database import Database
 import keyboard as kb
 from config import MANAGERS, DEPARTMENTS
+from config import is_whitelisted
 
 router = Router()
 db = Database()
 
 async def check_manager(message: Message):
     """Проверка, что пользователь - руководитель"""
+    if not is_whitelisted(message.from_user.id):
+        await message.answer("⛔ Доступ к боту ограничен. Обратитесь к администратору.")
+        return False
+
     if message.from_user.id not in MANAGERS:
         await message.answer("❌ У вас нет доступа к этому разделу")
         return False
@@ -52,7 +57,7 @@ async def department_selected(callback: CallbackQuery, state: FSMContext):
         ])
     )
 
-@router.message(F.text == "📊 Отчеты на проверку")
+@router.message(F.text == "📊 Отчёты на проверку")
 async def reports_to_check(message: Message):
     if not await check_manager(message):
         return
@@ -264,9 +269,9 @@ async def manager_reject_payment(callback: CallbackQuery, state: FSMContext):
     await state.update_data(reject_request_id=request_id)
     
     await callback.message.answer("❌ Напишите причину отклонения:")
-    await state.set_state(ManagerActions.correction_comment)
+    await state.set_state(ManagerActions.payment_reject_comment)
 
-@router.message(ManagerActions.correction_comment)
+@router.message(ManagerActions.payment_reject_comment)
 async def manager_reject_reason(message: Message, state: FSMContext):
     data = await state.get_data()
     request_id = data['reject_request_id']

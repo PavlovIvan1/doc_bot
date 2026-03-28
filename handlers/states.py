@@ -2,13 +2,17 @@ from aiogram.fsm.state import State, StatesGroup
 
 class Registration(StatesGroup):
     """Состояния для регистрации нового сотрудника"""
-    full_name = State()
+    last_name = State()
+    first_name = State()
+    middle_name = State()
     passport_series = State()
     passport_date = State()
     passport_issued = State()
     passport_code = State()
     birth_date = State()
-    address = State()
+    address_index = State()
+    address_city = State()
+    address_street = State()
     inn = State()
     phone = State()
     email = State()
@@ -48,6 +52,7 @@ class ManagerActions(StatesGroup):
     select_department = State()
     review_report = State()
     correction_comment = State()
+    payment_reject_comment = State()
     change_position = State()
     select_employee = State()
 

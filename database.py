@@ -74,13 +74,22 @@ class Database:
                 description TEXT,
                 amount DECIMAL(10,2),
                 bank_details TEXT,
-                status ENUM('pending', 'approved_by_manager', 'rejected', 'sent_to_lawyer') DEFAULT 'pending',
+                status ENUM('pending', 'approved_by_manager', 'rejected', 'sent_to_lawyer', 'payment_order_created', 'paid') DEFAULT 'pending',
                 manager_comment TEXT,
                 manager_id BIGINT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         """)
+
+        # Миграция: расширяем статусы work_reports для этапов оплаты
+        try:
+            cursor.execute(
+                "ALTER TABLE work_reports MODIFY COLUMN status ENUM('pending', 'approved_by_manager', 'rejected', 'sent_to_lawyer', 'payment_order_created', 'paid') DEFAULT 'pending'"
+            )
+            self.connection.commit()
+        except:
+            pass
         
         # Таблица документов
         cursor.execute("""

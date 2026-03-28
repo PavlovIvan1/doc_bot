@@ -9,6 +9,7 @@ from handlers.states import MonthlyReport, BankDetails, DocumentUpload, PaymentR
 from database import Database
 import keyboard as kb
 from config import MANAGERS
+from config import is_whitelisted
 
 router = Router()
 db = Database()
@@ -19,6 +20,10 @@ os.makedirs("downloads/nda", exist_ok=True)
 
 # Проверка доступа
 async def check_active_user(message: Message):
+    if not is_whitelisted(message.from_user.id):
+        await message.answer("⛔ Доступ к боту ограничен. Обратитесь к администратору.")
+        return False
+
     user = db.get_user(message.from_user.id)
     if not user or user['registration_status'] != 'active':
         await message.answer("❌ Доступ запрещен. Пройдите регистрацию.")
@@ -283,14 +288,20 @@ async def skip_contract(callback: CallbackQuery, state: FSMContext):
 
 @router.message(PaymentRequest.invoice_file)
 async def payment_request_invoice(message: Message, state: FSMContext, bot):
-    if not message.document:
-        await message.answer("❌ Пожалуйста, прикрепите файл")
+    if not message.document and not message.photo:
+        await message.answer("❌ Пожалуйста, прикрепите счёт (файл или фото)")
         return
-    
-    # Скачиваем файл
-    file = await bot.get_file(message.document.file_id)
-    file_ext = message.document.file_name.split('.')[-1] if '.' in message.document.file_name else 'pdf'
-    file_path = f"downloads/payment_requests/{message.from_user.id}_{message.document.file_name}"
+
+    # Скачиваем файл/фото
+    if message.document:
+        file_id = message.document.file_id
+        original_name = message.document.file_name
+    else:
+        file_id = message.photo[-1].file_id
+        original_name = f"invoice_{message.from_user.id}.jpg"
+
+    file = await bot.get_file(file_id)
+    file_path = f"downloads/payment_requests/{message.from_user.id}_{original_name}"
     os.makedirs("downloads/payment_requests", exist_ok=True)
     await bot.download_file(file.file_path, file_path)
     
@@ -305,8 +316,8 @@ async def payment_request_invoice(message: Message, state: FSMContext, bot):
 📝 Назначение: {data['payment_purpose']}
 🏢 Контрагент: {data['counterparty']}
 📁 Проект: {data['project']}
-📋 Договор: {data['contract_number'] or 'Не указан'}
-📎 Счёт: {message.document.file_name}
+ 📋 Договор: {data['contract_number'] or 'Не указан'}
+ 📎 Счёт: {original_name}
     """
     
     await message.answer(text)
@@ -417,6 +428,13 @@ async def view_my_request(callback: CallbackQuery):
     
     docs = db.get_payment_request_documents(request_id)
     docs_text = "\n".join([f"  - {d['doc_type']}" for d in docs]) or "  Нет документов"
+
+    history = db.get_payment_request_history(request_id)
+    history_text = "\n".join([
+        f"  - {h['changed_at'].strftime('%d.%m.%Y %H:%M') if h.get('changed_at') else ''}: {status_names.get(h['new_status'], h['new_status'])}"
+        + (f" ({h['comment']})" if h.get('comment') else "")
+        for h in history
+    ]) or "  История пока пуста"
     
     comment = request.get('manager_comment') or request.get('finance_comment')
     comment_text = f"\n📝 Комментарий: {comment}" if comment else ""
@@ -433,6 +451,9 @@ async def view_my_request(callback: CallbackQuery):
 
 📎 Документы:
 {docs_text}
+
+🕘 История статусов:
+{history_text}
 {comment_text}
     """
     
@@ -523,8 +544,8 @@ async def save_check(message: Message, state: FSMContext, bot):
     
     # Если все нужные документы загружены - меняем статус на "Документы загружены"
     if request['status'] == 'paid':
-        # Проверяем есть ли акт и чек (основные документы)
-        if 'act' in doc_types and 'check' in doc_types:
+        # Проверяем обязательные закрывающие документы
+        if 'act' in doc_types and 'contract' in doc_types and 'check' in doc_types:
             db.update_payment_request_status(request_id, 'documents_uploaded')
             await message.answer(
                 "✅ Чек прикреплён!\n\n"
@@ -535,6 +556,7 @@ async def save_check(message: Message, state: FSMContext, bot):
                 "✅ Чек прикреплён!\n\n"
                 "Пожалуйста, убедите что загружены:\n"
                 "- Подписанный акт\n"
+                "- Подписанный договор\n"
                 "- Чек\n\n"
                 "Когда все документы будут загружены, статус изменится на 'Документы загружены'"
             )
@@ -544,7 +566,7 @@ async def save_check(message: Message, state: FSMContext, bot):
     await state.clear()
 
 # Кнопка для закрытия заявки (когда всё готово)
-@router.callback_query(F.data == "close_request")
+@router.callback_query(F.data.startswith("close_request_"))
 async def close_request(callback: CallbackQuery):
     request_id = int(callback.data.replace("close_request_", ""))
     request = db.get_payment_request(request_id)
@@ -557,10 +579,11 @@ async def close_request(callback: CallbackQuery):
     docs = db.get_payment_request_documents(request_id)
     doc_types = [d['doc_type'] for d in docs]
     
-    if 'act' not in doc_types or 'check' not in doc_types:
+    if 'act' not in doc_types or 'contract' not in doc_types or 'check' not in doc_types:
         await callback.message.answer(
             "❌ Нельзя закрыть заявку. Загрузите:\n"
             "- Подписанный акт\n"
+            "- Подписанный договор\n"
             "- Чек"
         )
         return

@@ -283,6 +283,7 @@ def admin_main_keyboard():
         [KeyboardButton(text="👥 Управление пользователями")],
         [KeyboardButton(text="➕ Добавить пользователя")],
         [KeyboardButton(text="🔄 Изменить роль")],
+        [KeyboardButton(text="🗑 Удалить пользователя")],
         [KeyboardButton(text="🚫 Заблокировать пользователя")],
         [KeyboardButton(text="📊 Статистика")]
     ]
@@ -353,7 +354,7 @@ def request_documents_keyboard(request_id, status):
     return builder.as_markup()
 
 # ----- КЛАВИАТУРЫ ДЛЯ ФИНАНСОВОГО ОТДЕЛА -----
-def finance_main_keyboard_extended():
+def finance_main_keyboard_extended_v2():
     """Расширенное меню финансового отдела"""
     buttons = [
         [KeyboardButton(text="💰 Заявки на оплату")],

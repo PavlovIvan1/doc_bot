@@ -5,6 +5,7 @@ from aiogram.fsm.context import FSMContext
 from database import Database
 import keyboard as kb
 from config import FINANCE_DIRECTOR_ID, ACCOUNTANT_ID, LAWYER_ID
+from config import is_whitelisted
 import os
 
 router = Router()
@@ -12,6 +13,10 @@ db = Database()
 
 async def check_finance(message: Message):
     """Проверка доступа к фин отделу"""
+    if not is_whitelisted(message.from_user.id):
+        await message.answer("⛔ Доступ к боту ограничен. Обратитесь к администратору.")
+        return False
+
     if message.from_user.id not in [FINANCE_DIRECTOR_ID, ACCOUNTANT_ID]:
         await message.answer("❌ У вас нет доступа к этому разделу")
         return False
@@ -186,14 +191,14 @@ async def finance_approve_payment(callback: CallbackQuery):
     request_id = int(callback.data.replace("finance_approve_", ""))
     
     # Обновляем статус
-    db.update_payment_request_status(request_id, 'approved', callback.from_user.id)
+    db.update_payment_request_status(request_id, 'awaiting_payment', callback.from_user.id)
     
     # Уведомляем сотрудника
     request = db.get_payment_request(request_id)
     await callback.bot.send_message(
         request['user_id'],
         f"✅ Ваша заявка #{request_id} одобрена финансовым отделом!\n\n"
-        "Ожидайте оплату."
+        "Статус: Ожидает оплату."
     )
     
     # Уведомляем бухгалтера
@@ -266,6 +271,16 @@ async def awaiting_payment_requests(message: Message):
 @router.callback_query(F.data.startswith("accountant_paid_"))
 async def accountant_mark_paid(callback: CallbackQuery):
     request_id = int(callback.data.replace("accountant_paid_", ""))
+
+    # По ТЗ: акт и договор должны быть загружены до оплаты
+    docs = db.get_payment_request_documents(request_id)
+    doc_types = [d['doc_type'] for d in docs]
+    if 'act' not in doc_types or 'contract' not in doc_types:
+        await callback.answer(
+            "Нельзя отметить оплату: до оплаты должны быть загружены подписанный акт и договор.",
+            show_alert=True
+        )
+        return
     
     # Обновляем статус
     db.update_payment_request_status(request_id, 'paid', callback.from_user.id)
@@ -276,8 +291,6 @@ async def accountant_mark_paid(callback: CallbackQuery):
     # Создаём клавиатуру с кнопками для загрузки документов
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
     doc_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📎 Прикрепить акт", callback_data=f"upload_act_{request_id}")],
-        [InlineKeyboardButton(text="📑 Прикрепить договор", callback_data=f"upload_contract_{request_id}")],
         [InlineKeyboardButton(text="🧾 Прикрепить чек", callback_data=f"upload_check_{request_id}")]
     ])
     
@@ -285,14 +298,40 @@ async def accountant_mark_paid(callback: CallbackQuery):
         request['user_id'],
         f"✅ Заявка #{request_id} оплачена!\n\n"
         f"Сумма: {request['amount']} руб.\n\n"
-        "📎 Пожалуйста, прикрепите:\n"
-        "- Подписанный акт\n"
-        "- Подписанный договор (если требуется)\n"
-        "🧾 Чек из «Мой налог» (для самозанятых)",
+        "🧾 Пожалуйста, прикрепите чек из «Мой налог» (для самозанятых).",
         reply_markup=doc_keyboard
     )
     
     await callback.message.edit_text(callback.message.text + "\n\n✅ Оплата подтверждена!")
+
+
+@router.callback_query(F.data.startswith("accountant_upload_proof_"))
+async def accountant_upload_proof(callback: CallbackQuery, state: FSMContext):
+    request_id = int(callback.data.replace("accountant_upload_proof_", ""))
+    await state.update_data(accountant_proof_request_id=request_id)
+    await callback.message.answer("📎 Прикрепите платёжное поручение (файл):")
+    await state.set_state("accountant_upload_proof_file")
+
+
+@router.message("accountant_upload_proof_file")
+async def accountant_upload_proof_file(message: Message, state: FSMContext, bot):
+    if not message.document:
+        await message.answer("❌ Пожалуйста, прикрепите файл платёжного поручения")
+        return
+
+    data = await state.get_data()
+    request_id = data['accountant_proof_request_id']
+
+    file = await bot.get_file(message.document.file_id)
+    os.makedirs("downloads/payment_requests", exist_ok=True)
+    file_path = f"downloads/payment_requests/payment_proof_{request_id}_{message.document.file_name}"
+    await bot.download_file(file.file_path, file_path)
+
+    db.add_payment_request_document(request_id, 'payment_proof', file_path)
+    db.update_payment_request_status(request_id, 'awaiting_payment', message.from_user.id, 'Платёжное поручение загружено')
+
+    await message.answer("✅ Платёжное поручение прикреплено. Статус заявки: Ожидает оплаты.")
+    await state.clear()
 
 # Связаться с сотрудником
 @router.message(F.text == "👤 Связаться с сотрудником")
