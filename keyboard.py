@@ -18,13 +18,19 @@ def main_menu_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
-def simple_main_menu_keyboard():
-    """Упрощённое меню - 2 кнопки по ТЗ"""
-    buttons = [
-        [KeyboardButton(text="📄 Подписать NDA")],
-        [KeyboardButton(text="💰 Создать счёт")],
-        [KeyboardButton(text="📋 Меню")]
-    ]
+def simple_main_menu_keyboard(nda_signed: bool = False):
+    """Упрощённое меню для заказчика с учётом статуса NDA"""
+    if nda_signed:
+        buttons = [
+            [KeyboardButton(text="📑 Подписать договор")],
+            [KeyboardButton(text="📋 Сдать факт выполненных работ")],
+            [KeyboardButton(text="📋 Меню")]
+        ]
+    else:
+        buttons = [
+            [KeyboardButton(text="📄 Подписать NDA")],
+            [KeyboardButton(text="📋 Меню")]
+        ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 def department_selection_keyboard():

@@ -78,10 +78,20 @@ async def cmd_start(message: Message):
     
     if user:
         if user['registration_status'] == 'active':
-            # По ТЗ - 2 кнопки: Подписать NDA и Создать счёт
+            nda_signed = user.get('nda_status') == 'signed'
+            if nda_signed:
+                start_text = (
+                    "Выбери действие:\n"
+                    "1) Подписать договор\n"
+                    "2) Сдать факт выполненных работ\n"
+                    "3) Дальше открой полное меню"
+                )
+            else:
+                start_text = "Выбери действие: сначала нужно подписать NDA"
+
             await message.answer(
-                "Выбери действие:",
-                reply_markup=kb.simple_main_menu_keyboard()
+                start_text,
+                reply_markup=kb.simple_main_menu_keyboard(nda_signed=nda_signed)
             )
 
             # Напоминания по незагруженным закрывающим документам
@@ -156,6 +166,24 @@ async def create_invoice_shortcut(message: Message, state: FSMContext):
     # Перенаправляем на создание заявки
     await message.answer("💰 Создание заявки на оплату\n\nВведите сумму (только число, например: 15000):")
     await state.set_state(PaymentRequest.amount)
+
+
+@router.message(F.text == "📑 Подписать договор")
+async def sign_contract_shortcut(message: Message):
+    user = db.get_user(message.from_user.id)
+    if not user or user['registration_status'] != 'active':
+        await message.answer("❌ Доступ запрещён. Пройдите регистрацию.")
+        return
+
+    if user.get('nda_status') != 'signed':
+        await message.answer("📄 Сначала нужно подписать и согласовать NDA.")
+        return
+
+    await message.answer(
+        "📑 Этап договора активен.\n"
+        "Откройте полное меню (кнопка «📋 Меню») и загрузите договор в своей заявке.\n"
+        "После договора сдайте факт выполненных работ."
+    )
 
 # Обработчик кнопки "Меню" - показывает полное меню
 @router.message(F.text == "📋 Меню")
