@@ -426,10 +426,16 @@ class Database:
                     (status, user_id, comment, request_id)
                 )
         elif user_id:
-            cursor.execute(
-                "UPDATE payment_requests SET status = %s, manager_id = %s WHERE id = %s",
-                (status, user_id, request_id)
-            )
+            if status == 'paid':
+                cursor.execute(
+                    "UPDATE payment_requests SET status = %s, finance_id = %s WHERE id = %s",
+                    (status, user_id, request_id)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE payment_requests SET status = %s, manager_id = %s WHERE id = %s",
+                    (status, user_id, request_id)
+                )
         else:
             cursor.execute(
                 "UPDATE payment_requests SET status = %s WHERE id = %s",

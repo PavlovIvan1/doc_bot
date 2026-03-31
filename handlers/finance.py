@@ -4,6 +4,7 @@ from aiogram.types import InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from database import Database
 import keyboard as kb
+from handlers.states import FinanceActions
 from config import FINANCE_DIRECTOR_ID, ACCOUNTANT_ID, LAWYER_ID
 from config import is_whitelisted
 import os
@@ -219,9 +220,9 @@ async def finance_reject_payment(callback: CallbackQuery, state: FSMContext):
     await state.update_data(finance_reject_id=request_id)
     
     await callback.message.answer("❌ Напишите причину возврата:")
-    await state.set_state("finance_reject_reason")
+    await state.set_state(FinanceActions.reject_reason)
 
-@router.message("finance_reject_reason")
+@router.message(FinanceActions.reject_reason)
 async def finance_reject_reason(message: Message, state: FSMContext):
     data = await state.get_data()
     request_id = data['finance_reject_id']
@@ -271,16 +272,6 @@ async def awaiting_payment_requests(message: Message):
 @router.callback_query(F.data.startswith("accountant_paid_"))
 async def accountant_mark_paid(callback: CallbackQuery):
     request_id = int(callback.data.replace("accountant_paid_", ""))
-
-    # По ТЗ: акт и договор должны быть загружены до оплаты
-    docs = db.get_payment_request_documents(request_id)
-    doc_types = [d['doc_type'] for d in docs]
-    if 'act' not in doc_types or 'contract' not in doc_types:
-        await callback.answer(
-            "Нельзя отметить оплату: до оплаты должны быть загружены подписанный акт и договор.",
-            show_alert=True
-        )
-        return
     
     # Обновляем статус
     db.update_payment_request_status(request_id, 'paid', callback.from_user.id)
@@ -303,6 +294,7 @@ async def accountant_mark_paid(callback: CallbackQuery):
     )
     
     await callback.message.edit_text(callback.message.text + "\n\n✅ Оплата подтверждена!")
+    await callback.answer("✅ Отмечено как оплачено")
 
 
 @router.callback_query(F.data.startswith("accountant_upload_proof_"))
@@ -310,10 +302,11 @@ async def accountant_upload_proof(callback: CallbackQuery, state: FSMContext):
     request_id = int(callback.data.replace("accountant_upload_proof_", ""))
     await state.update_data(accountant_proof_request_id=request_id)
     await callback.message.answer("📎 Прикрепите платёжное поручение (файл):")
-    await state.set_state("accountant_upload_proof_file")
+    await state.set_state(FinanceActions.accountant_upload_proof_file)
+    await callback.answer()
 
 
-@router.message("accountant_upload_proof_file")
+@router.message(FinanceActions.accountant_upload_proof_file)
 async def accountant_upload_proof_file(message: Message, state: FSMContext, bot):
     if not message.document:
         await message.answer("❌ Пожалуйста, прикрепите файл платёжного поручения")
@@ -364,9 +357,9 @@ async def finance_contact_user(callback: CallbackQuery, state: FSMContext):
     await state.update_data(contact_user_id=user_id)
     
     await callback.message.answer("Введите сообщение для сотрудника:")
-    await state.set_state("finance_send_message")
+    await state.set_state(FinanceActions.send_message)
 
-@router.message("finance_send_message")
+@router.message(FinanceActions.send_message)
 async def finance_send_to_user(message: Message, state: FSMContext):
     data = await state.get_data()
     user_id = data['contact_user_id']

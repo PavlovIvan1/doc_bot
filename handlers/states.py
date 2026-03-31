@@ -87,3 +87,10 @@ class AdminActions(StatesGroup):
     confirm_action = State()
     add_user_id = State()
     set_role = State()
+
+
+class FinanceActions(StatesGroup):
+    """Состояния для финансового отдела/бухгалтера"""
+    reject_reason = State()
+    accountant_upload_proof_file = State()
+    send_message = State()
