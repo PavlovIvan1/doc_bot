@@ -343,8 +343,8 @@ def request_documents_keyboard(request_id, status):
     """Клавиатура для загрузки документов к заявке"""
     builder = InlineKeyboardBuilder()
     
-    # До оплаты можно загрузить акт и договор
-    if status in ['pending_manager', 'pending_finance', 'approved', 'awaiting_payment']:
+    # Акт и договор можно загрузить на большинстве этапов, включая уже оплаченную заявку
+    if status in ['pending_manager', 'pending_finance', 'approved', 'awaiting_payment', 'paid', 'documents_uploaded']:
         builder.add(InlineKeyboardButton(text="📎 Прикрепить акт", callback_data=f"upload_act_{request_id}"))
         builder.add(InlineKeyboardButton(text="📑 Прикрепить договор", callback_data=f"upload_contract_{request_id}"))
     

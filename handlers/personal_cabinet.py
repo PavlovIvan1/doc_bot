@@ -14,6 +14,18 @@ from config import is_whitelisted
 router = Router()
 db = Database()
 
+REQUIRED_CLOSING_DOCS = ("act", "contract", "check")
+DOC_LABELS = {
+    "act": "Подписанный акт",
+    "contract": "Подписанный договор",
+    "check": "Чек",
+}
+UPLOAD_ALLOWED_STATUSES = {
+    "act": {"pending_manager", "pending_finance", "approved", "awaiting_payment", "paid", "documents_uploaded"},
+    "contract": {"pending_manager", "pending_finance", "approved", "awaiting_payment", "paid", "documents_uploaded"},
+    "check": {"paid", "documents_uploaded"},
+}
+
 # Создаём директории для загрузок если не существуют
 os.makedirs("downloads/payment_requests", exist_ok=True)
 os.makedirs("downloads/nda", exist_ok=True)
@@ -29,6 +41,78 @@ async def check_active_user(message: Message):
         await message.answer("❌ Доступ запрещен. Пройдите регистрацию.")
         return False
     return True
+
+
+def get_missing_closing_docs(doc_types):
+    return [doc for doc in REQUIRED_CLOSING_DOCS if doc not in doc_types]
+
+
+def format_missing_docs(missing_docs):
+    return "\n".join(f"- {DOC_LABELS.get(doc, doc)}" for doc in missing_docs)
+
+
+def evaluate_closing_docs_status(request_id):
+    request = db.get_payment_request(request_id)
+    if not request:
+        return None, [], False
+
+    docs = db.get_payment_request_documents(request_id)
+    doc_types = {d['doc_type'] for d in docs}
+    missing_docs = get_missing_closing_docs(doc_types)
+    status_changed = False
+
+    if request['status'] in ('paid', 'documents_uploaded') and not missing_docs and request['status'] != 'documents_uploaded':
+        db.update_payment_request_status(request_id, 'documents_uploaded')
+        status_changed = True
+        request['status'] = 'documents_uploaded'
+
+    return request, missing_docs, status_changed
+
+
+def build_upload_result_message(doc_type, request, missing_docs, status_changed):
+    success_text = {
+        'act': '✅ Акт прикреплён!',
+        'contract': '✅ Договор прикреплён!',
+        'check': '✅ Чек прикреплён!',
+    }[doc_type]
+
+    if not request:
+        return success_text
+
+    if request['status'] in ('paid', 'documents_uploaded'):
+        if not missing_docs:
+            if status_changed:
+                return success_text + "\n\n📎 Статус изменён: Документы загружены"
+            return success_text + "\n\n📎 Все закрывающие документы уже загружены"
+        return success_text + "\n\nОсталось загрузить:\n" + format_missing_docs(missing_docs)
+
+    return success_text
+
+
+async def show_upload_requests_menu(message: Message, doc_type: str):
+    if not await check_active_user(message):
+        return
+
+    requests = db.get_user_payment_requests(message.from_user.id)
+    allowed_statuses = UPLOAD_ALLOWED_STATUSES[doc_type]
+    filtered_requests = [req for req in requests if req['status'] in allowed_statuses]
+
+    if not filtered_requests:
+        if doc_type == 'check':
+            await message.answer("❌ Нет заявок для загрузки чека. Чек доступен после статуса 'Оплачено'.")
+        else:
+            await message.answer("❌ Нет заявок, куда сейчас можно загрузить этот документ.")
+        return
+
+    title = {
+        'act': '📎 Выберите заявку для загрузки акта:',
+        'contract': '📑 Выберите заявку для загрузки договора:',
+        'check': '🧾 Выберите заявку для загрузки чека:',
+    }[doc_type]
+    await message.answer(
+        title,
+        reply_markup=kb.payment_request_list_keyboard(filtered_requests, prefix=f"upload_{doc_type}")
+    )
 
 @router.message(F.text == "📋 Сдать факт выполненных работ")
 async def start_monthly_report(message: Message, state: FSMContext):
@@ -406,6 +490,21 @@ async def my_payment_requests(message: Message):
     await message.answer("📁 Ваши заявки на оплату:",
                          reply_markup=kb.my_requests_keyboard(requests))
 
+
+@router.message(F.text == "📎 Прикрепить акт")
+async def upload_act_from_menu(message: Message):
+    await show_upload_requests_menu(message, 'act')
+
+
+@router.message(F.text == "📑 Прикрепить договор")
+async def upload_contract_from_menu(message: Message):
+    await show_upload_requests_menu(message, 'contract')
+
+
+@router.message(F.text == "🧾 Загрузить чек")
+async def upload_check_from_menu(message: Message):
+    await show_upload_requests_menu(message, 'check')
+
 @router.callback_query(F.data.startswith("my_request_"))
 async def view_my_request(callback: CallbackQuery):
     request_id = int(callback.data.replace("my_request_", ""))
@@ -466,25 +565,55 @@ async def view_my_request(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("upload_act_"))
 async def upload_act(callback: CallbackQuery, state: FSMContext):
     request_id = int(callback.data.replace("upload_act_", ""))
+
+    request = db.get_payment_request(request_id)
+    if not request or request['user_id'] != callback.from_user.id:
+        await callback.answer("Заявка не найдена", show_alert=True)
+        return
+    if request['status'] not in UPLOAD_ALLOWED_STATUSES['act']:
+        await callback.answer("Сейчас нельзя загрузить акт для этой заявки", show_alert=True)
+        return
+
     await state.update_data(upload_request_id=request_id, upload_type='act')
     await callback.message.answer("📎 Прикрепите подписанный акт:")
     await state.set_state(PaymentRequestUpload.act)
+    await callback.answer()
 
 # Прикрепление договора
 @router.callback_query(F.data.startswith("upload_contract_"))
 async def upload_contract(callback: CallbackQuery, state: FSMContext):
     request_id = int(callback.data.replace("upload_contract_", ""))
+
+    request = db.get_payment_request(request_id)
+    if not request or request['user_id'] != callback.from_user.id:
+        await callback.answer("Заявка не найдена", show_alert=True)
+        return
+    if request['status'] not in UPLOAD_ALLOWED_STATUSES['contract']:
+        await callback.answer("Сейчас нельзя загрузить договор для этой заявки", show_alert=True)
+        return
+
     await state.update_data(upload_request_id=request_id, upload_type='contract')
     await callback.message.answer("📑 Прикрепите подписанный договор:")
     await state.set_state(PaymentRequestUpload.contract)
+    await callback.answer()
 
 # Прикрепление чека
 @router.callback_query(F.data.startswith("upload_check_"))
 async def upload_check(callback: CallbackQuery, state: FSMContext):
     request_id = int(callback.data.replace("upload_check_", ""))
+
+    request = db.get_payment_request(request_id)
+    if not request or request['user_id'] != callback.from_user.id:
+        await callback.answer("Заявка не найдена", show_alert=True)
+        return
+    if request['status'] not in UPLOAD_ALLOWED_STATUSES['check']:
+        await callback.answer("Чек можно загрузить только после оплаты", show_alert=True)
+        return
+
     await state.update_data(upload_request_id=request_id, upload_type='check')
     await callback.message.answer("🧾 Прикрепите чек:")
     await state.set_state(PaymentRequestUpload.check)
+    await callback.answer()
 
 @router.message(PaymentRequestUpload.act)
 async def save_act(message: Message, state: FSMContext, bot):
@@ -493,15 +622,20 @@ async def save_act(message: Message, state: FSMContext, bot):
         return
     
     data = await state.get_data()
-    request_id = data['upload_request_id']
+    request_id = data.get('upload_request_id')
+    if not request_id:
+        await message.answer("❌ Сессия загрузки не найдена. Нажмите кнопку 'Прикрепить акт' еще раз.")
+        await state.clear()
+        return
     
     file = await bot.get_file(message.document.file_id)
     file_path = f"downloads/payment_requests/{message.from_user.id}_act_{message.document.file_name}"
     await bot.download_file(file.file_path, file_path)
     
     db.add_payment_request_document(request_id, 'act', file_path)
-    
-    await message.answer("✅ Акт прикреплён!")
+
+    request, missing_docs, status_changed = evaluate_closing_docs_status(request_id)
+    await message.answer(build_upload_result_message('act', request, missing_docs, status_changed))
     await state.clear()
 
 @router.message(PaymentRequestUpload.contract)
@@ -511,15 +645,20 @@ async def save_contract(message: Message, state: FSMContext, bot):
         return
     
     data = await state.get_data()
-    request_id = data['upload_request_id']
+    request_id = data.get('upload_request_id')
+    if not request_id:
+        await message.answer("❌ Сессия загрузки не найдена. Нажмите кнопку 'Прикрепить договор' еще раз.")
+        await state.clear()
+        return
     
     file = await bot.get_file(message.document.file_id)
     file_path = f"downloads/payment_requests/{message.from_user.id}_contract_{message.document.file_name}"
     await bot.download_file(file.file_path, file_path)
     
     db.add_payment_request_document(request_id, 'contract', file_path)
-    
-    await message.answer("✅ Договор прикреплён!")
+
+    request, missing_docs, status_changed = evaluate_closing_docs_status(request_id)
+    await message.answer(build_upload_result_message('contract', request, missing_docs, status_changed))
     await state.clear()
 
 @router.message(PaymentRequestUpload.check)
@@ -529,39 +668,20 @@ async def save_check(message: Message, state: FSMContext, bot):
         return
     
     data = await state.get_data()
-    request_id = data['upload_request_id']
+    request_id = data.get('upload_request_id')
+    if not request_id:
+        await message.answer("❌ Сессия загрузки не найдена. Нажмите кнопку 'Загрузить чек' еще раз.")
+        await state.clear()
+        return
     
     file = await bot.get_file(message.document.file_id)
     file_path = f"downloads/payment_requests/{message.from_user.id}_check_{message.document.file_name}"
     await bot.download_file(file.file_path, file_path)
     
     db.add_payment_request_document(request_id, 'check', file_path)
-    
-    # Проверяем какие документы загружены и обновляем статус
-    request = db.get_payment_request(request_id)
-    docs = db.get_payment_request_documents(request_id)
-    doc_types = [d['doc_type'] for d in docs]
-    
-    # Если все нужные документы загружены - меняем статус на "Документы загружены"
-    if request['status'] == 'paid':
-        # Проверяем обязательные закрывающие документы
-        if 'act' in doc_types and 'contract' in doc_types and 'check' in doc_types:
-            db.update_payment_request_status(request_id, 'documents_uploaded')
-            await message.answer(
-                "✅ Чек прикреплён!\n\n"
-                "📎 Статус изменён: Документы загружены"
-            )
-        else:
-            await message.answer(
-                "✅ Чек прикреплён!\n\n"
-                "Пожалуйста, убедите что загружены:\n"
-                "- Подписанный акт\n"
-                "- Подписанный договор\n"
-                "- Чек\n\n"
-                "Когда все документы будут загружены, статус изменится на 'Документы загружены'"
-            )
-    else:
-        await message.answer("✅ Чек прикреплён!")
+
+    request, missing_docs, status_changed = evaluate_closing_docs_status(request_id)
+    await message.answer(build_upload_result_message('check', request, missing_docs, status_changed))
     
     await state.clear()
 

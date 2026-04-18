@@ -445,26 +445,10 @@ async def reg_tax_document(message: Message, state: FSMContext, bot):
 async def reg_department(callback: CallbackQuery, state: FSMContext):
     department = callback.data.replace("dept_", "")
     await state.update_data(department=department)
-    
-    # Получаем все данные
+
     data = await state.get_data()
-    
-    # Формируем сообщение для подтверждения
-    text = f"""
-📋 Проверьте введенные данные:
+    text = build_registration_confirmation_text(data)
 
-👤 ФИО: {data['full_name']}
-🆔 ИНН: {data['inn']}
-📞 Телефон: {data['phone']}
-📧 Email: {data['email']}
-📅 Дата начала: {data['start_date']}
-💰 Налогообложение: {data['tax_type']}
-🏢 Отдел: {data['department']}
-📍 Адрес: {data['address']}
-
-Если всё верно - нажмите Подтвердить
-    """
-    
     await callback.message.edit_text(text, reply_markup=kb.confirm_data_keyboard())
     await state.set_state(Registration.confirm)
 
@@ -509,11 +493,11 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext, bot):
     
     await state.clear()
 
-# Обработчики для исправления данных (коротко)
-@router.callback_query(F.data.startswith("edit_"))
+# Обработчики для исправления данных (на этапе подтверждения)
+@router.callback_query(Registration.confirm, F.data.startswith("edit_"))
 async def edit_data(callback: CallbackQuery, state: FSMContext):
     field = callback.data.replace("edit_", "")
-    
+
     field_questions = {
         "full_name": "Введите новое ФИО:",
         "passport": "Введите новые паспортные данные:",
@@ -525,9 +509,13 @@ async def edit_data(callback: CallbackQuery, state: FSMContext):
         "tax": "Выберите новый тип налогообложения:",
         "department": "Выберите новый отдел:"
     }
-    
+
+    if field not in field_questions:
+        await callback.answer("Это поле нельзя редактировать здесь", show_alert=True)
+        return
+
     await callback.message.answer(field_questions[field])
-    
+
     if field == "tax":
         await callback.message.answer("Выберите тип:", reply_markup=kb.tax_type_keyboard())
         await state.set_state(Registration.tax_type)
@@ -537,4 +525,102 @@ async def edit_data(callback: CallbackQuery, state: FSMContext):
     else:
         # Сохраняем что редактируем
         await state.update_data(editing_field=field)
-        await state.set_state("editing_data")
+        await state.set_state(Registration.editing_data)
+
+
+def build_registration_confirmation_text(data: dict) -> str:
+    return f"""
+📋 Проверьте введенные данные:
+
+👤 ФИО: {data.get('full_name', '-')}
+🆔 ИНН: {data.get('inn', '-')}
+📞 Телефон: {data.get('phone', '-')}
+📧 Email: {data.get('email', '-')}
+📅 Дата начала: {data.get('start_date', '-')}
+💰 Налогообложение: {data.get('tax_type', '-')}
+🏢 Отдел: {data.get('department', '-')}
+📍 Адрес: {data.get('address', '-')}
+
+Если всё верно - нажмите Подтвердить
+    """
+
+
+@router.message(Registration.editing_data)
+async def save_edited_field(message: Message, state: FSMContext):
+    data = await state.get_data()
+    field = data.get("editing_field")
+    value = (message.text or "").strip()
+    bypass_validation = is_validation_bypassed(message.from_user.id)
+
+    if not field:
+        await message.answer("❌ Не удалось определить редактируемое поле. Нажмите кнопку 'Исправить' снова.")
+        await state.set_state(Registration.confirm)
+        return
+
+    if not value:
+        await message.answer("❌ Поле не может быть пустым. Введите значение заново.")
+        return
+
+    if field == "inn" and not bypass_validation:
+        if not value.isdigit() or len(value) != 12:
+            await message.answer("❌ ИНН физического лица должен состоять из 12 цифр")
+            return
+
+    if field == "email" and not bypass_validation:
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value):
+            await message.answer("❌ Неверный формат email. Нужен полный адрес вида name@domain.ru")
+            return
+
+    if field == "start_date":
+        try:
+            datetime.strptime(value, "%d.%m.%Y")
+        except ValueError:
+            await message.answer("❌ Неверный формат даты. Используй ДД.ММ.ГГГГ")
+            return
+
+    if field == "phone" and not bypass_validation:
+        digits = re.sub(r"\D", "", value)
+        min_len = 11 if value.startswith('+7') or value.startswith('8') or digits.startswith('7') else 9
+        if len(digits) < min_len:
+            await message.answer(f"❌ Номер телефона слишком короткий. Минимум {min_len} цифр")
+            return
+
+    if field == "passport" and not bypass_validation:
+        if " " in value:
+            await message.answer("❌ Паспортные данные нужно вводить в одну строку без пробелов")
+            return
+        if not value.isdigit() or len(value) < 10:
+            await message.answer("❌ Паспортные данные должны содержать только цифры и минимум 10 символов")
+            return
+
+    field_to_state_key = {
+        "full_name": "full_name",
+        "passport": "passport_data",
+        "address": "address",
+        "inn": "inn",
+        "phone": "phone",
+        "email": "email",
+        "start_date": "start_date",
+    }
+
+    state_key = field_to_state_key.get(field)
+    if not state_key:
+        await message.answer("❌ Это поле редактируется через кнопки, выберите его снова.")
+        await state.set_state(Registration.confirm)
+        return
+
+    await state.update_data(**{state_key: value})
+
+    if state_key == "full_name":
+        parts = value.split()
+        if len(parts) >= 1:
+            await state.update_data(last_name=parts[0])
+        if len(parts) >= 2:
+            await state.update_data(first_name=parts[1])
+        if len(parts) >= 3:
+            await state.update_data(middle_name=" ".join(parts[2:]))
+
+    updated_data = await state.get_data()
+    text = build_registration_confirmation_text(updated_data)
+    await message.answer(text, reply_markup=kb.confirm_data_keyboard())
+    await state.set_state(Registration.confirm)

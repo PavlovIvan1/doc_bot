@@ -21,6 +21,7 @@ class Registration(StatesGroup):
     tax_document = State()
     department = State()
     confirm = State()
+    editing_data = State()
 
 class NDAProcess(StatesGroup):
     """Состояния для подписания НДА"""
