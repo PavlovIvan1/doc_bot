@@ -3,6 +3,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _get_int_env(name: str, default: int = 0) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value = value.strip()
+    if value == "":
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DB_CONFIG = {
     'host': os.getenv("DB_HOST"),
@@ -15,10 +28,10 @@ DB_CONFIG = {
 }
 
 # ID сотрудников
-LAWYER_ID = int(os.getenv("LAWYER_ID", 0))
-FINANCE_DIRECTOR_ID = int(os.getenv("FINANCE_DIRECTOR_ID", 0))
-ACCOUNTANT_ID = int(os.getenv("ACCOUNTANT_ID", 0))
-MY_ID = int(os.getenv("MY_ID", 0))
+LAWYER_ID = _get_int_env("LAWYER_ID", 0)
+FINANCE_DIRECTOR_ID = _get_int_env("FINANCE_DIRECTOR_ID", 0)
+ACCOUNTANT_ID = _get_int_env("ACCOUNTANT_ID", 0)
+MY_ID = _get_int_env("MY_ID", 0)
 
 def is_whitelisted(user_id: int) -> bool:
     # Режим без whitelist: бот доступен всем пользователям.
